@@ -15,10 +15,13 @@
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
         .calendar-grid { display: grid; grid-template-cols: repeat(7, 1fr); gap: 2px; background-color: #f1f5f9; border-radius: 20px; overflow: hidden; }
-        .day-cell { min-height: 80px; background-color: white; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all 0.2s; }
+        .day-cell { min-height: 85px; background-color: white; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all 0.2s; }
         .day-cell:active { background-color: #f8fafc; transform: scale(0.98); }
         .booking-dot { width: 6px; height: 6px; border-radius: 50%; }
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
+        
+        /* シフトカレンダー用の小さいチップ */
+        .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -36,16 +39,18 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, addDoc, serverTimestamp, arrayUnion, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyC6fH7zMawRWM4vPzJwGw5P91zx6eLvXMM",
-            authDomain: "mentt-a93f3.firebaseapp.com",
-            projectId: "mentt-a93f3",
-            storageBucket: "mentt-a93f3.firebasestorage.app",
-            messagingSenderId: "759567068296",
-            appId: "1:759567068296:web:93796f181aa221b425433d"
-        };
+        const config = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyC6fH7zMawRWM4vPzJwGw5P91zx6eLvXMM",
+                authDomain: "mentt-a93f3.firebaseapp.com",
+                projectId: "mentt-a93f3",
+                storageBucket: "mentt-a93f3.firebasestorage.app",
+                messagingSenderId: "759567068296",
+                appId: "1:759567068296:web:93796f181aa221b425433d"
+            };
 
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(config);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
@@ -65,6 +70,9 @@
         const INVENTORY_LOCATIONS = ['事務所', '天神', '博多', '清川', 'エブリィ', 'IONビル２階'];
         const MANUAL_FACILITIES = ["共通", "天神", "博多", "清川"];
         const MANUAL_TAGS = ["入退室", "室内", "設備", "その他"];
+        
+        const STAFF_LIST = ["中牟田", "江藤", "松尾", "中牟田（昌）", "内尾", "橋口", "谷口", "事務所"];
+        const TIME_SLOTS = ["9-12", "12-15", "15-18", "18-21", "21-24"];
 
         // --- Core Helpers ---
         function Icon({ name, size = 24, color = "currentColor", strokeWidth = 2, className = "" }) {
@@ -86,6 +94,12 @@
                     {iconData.map(([tag, attrs], i) => React.createElement(tag, { ...attrs, key: i }))}
                 </svg>
             );
+        }
+
+        function formatMMDD(dateStr) {
+            if (!dateStr) return "";
+            const d = new Date(dateStr);
+            return `${d.getMonth() + 1}/${d.getDate()}`;
         }
 
         function formatDateTime(isoString) {
@@ -134,7 +148,6 @@
             );
         }
 
-        // Booking Options Display
         function BookingOptions({ booking }) {
             const options = [
                 { key: 'babyCrib', label: 'ベッド', icon: 'Baby' },
@@ -288,7 +301,102 @@
             );
         }
 
-        // --- Sections ---
+        // --- Shift Section ---
+        function ShiftSection({ shifts, onOpenAdd, onDelete, onEdit }) {
+            const todayStr = new Date().toLocaleDateString('sv-SE');
+            const [viewDate, setViewDate] = useState(new Date());
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            const todayShifts = useMemo(() => shifts.filter(s => s.date === todayStr), [shifts, todayStr]);
+
+            return (
+                <div className="space-y-6 animate-in fade-in duration-500 font-black text-left">
+                    <section className="space-y-3">
+                        <div className="flex justify-between items-center px-1">
+                            <h2 className="text-sm text-slate-400 uppercase italic font-black">Today's Shift</h2>
+                            <button onClick={onOpenAdd} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black">
+                                <Icon name="Plus" size={12} /> シフト一括登録
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                            {TIME_SLOTS.map(slot => {
+                                const activeStaff = todayShifts.filter(s => s.timeSlot === slot);
+                                const isTaniguchiHoliday = todayShifts.some(s => s.date === todayStr && s.taniguchiHoliday);
+                                return (
+                                    <div key={slot} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
+                                        <div>
+                                            <span className="text-[10px] text-indigo-500 font-black block mb-0.5">{slot}</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {activeStaff.length > 0 ? activeStaff.map(s => (
+                                                    <span key={s.id} className="text-slate-800 text-base font-black flex items-center gap-1">
+                                                        {s.staff}
+                                                    </span>
+                                                )) : <span className="text-slate-300 italic text-sm">予定なし</span>}
+                                            </div>
+                                        </div>
+                                        {isTaniguchiHoliday && (
+                                            <span className="text-rose-500 text-[10px] font-black border border-rose-200 bg-rose-50 px-2 py-1 rounded-full flex items-center gap-1">
+                                                <Icon name="CalendarOff" size={10} /> 谷口休み
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <section className="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="flex items-center gap-2 text-slate-800 font-black">
+                                <Icon name="ClipboardList" size={18} color="#6366F1" />
+                                {year}年 {month + 1}月 シフト表
+                            </h2>
+                            <div className="flex gap-1">
+                                <button onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronLeft" size={20} /></button>
+                                <button onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronRight" size={20} /></button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-7 text-center text-[9px] font-black text-slate-300 mb-2 uppercase">
+                            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}
+                        </div>
+
+                        <div className="calendar-grid">
+                            {[...Array(firstDayIndex)].map((_, i) => <div key={`empty-${i}`} className="day-cell bg-slate-50/20"></div>)}
+                            {[...Array(daysInMonth)].map((_, i) => {
+                                const day = i + 1;
+                                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                const dayShifts = shifts.filter(s => s.date === dateStr);
+                                const isToday = dateStr === todayStr;
+                                const hasHoliday = dayShifts.some(s => s.taniguchiHoliday);
+                                
+                                return (
+                                    <div key={day} className="day-cell" onClick={() => onEdit(dateStr)}>
+                                        <div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div>
+                                        <div className="w-full flex flex-col items-center overflow-hidden">
+                                            {dayShifts.map((s, idx) => (
+                                                idx < 4 && s.staff !== "NONE" && (
+                                                    <div key={s.id} className="shift-chip bg-slate-50 text-slate-500">
+                                                        {s.timeSlot}: {s.staff}
+                                                    </div>
+                                                )
+                                            ))}
+                                            {dayShifts.filter(s => s.staff !== "NONE").length > 4 && <div className="text-[6px] text-slate-300">more..</div>}
+                                            {hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">休み</div>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                </div>
+            );
+        }
+
+        // --- Booking Sections ---
         function ScheduleSection({ selectedFacility, bookings, onOpenAdd, onOpenDetail }) {
             const todayStr = new Date().toLocaleDateString('sv-SE');
             const [viewDate, setViewDate] = useState(new Date());
@@ -389,7 +497,7 @@
                     </div>
 
                     <div className="space-y-2 px-1">
-                        <label className="text-[10px] text-slate-400 uppercase tracking-widest pl-2 font-black">拠点フィルター</label>
+                        <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                             {['すべて', ...MANUAL_FACILITIES].map(f => (
                                 <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>
@@ -398,7 +506,7 @@
                     </div>
 
                     <div className="space-y-2 px-1">
-                        <label className="text-[10px] text-slate-400 uppercase tracking-widest pl-2 font-black">カテゴリーフィルター</label>
+                        <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                             {['すべて', ...MANUAL_TAGS].map(t => (
                                 <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
@@ -415,6 +523,118 @@
                         <button onClick={onOpenAdd} className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] active:scale-95 shadow-xl flex items-center gap-2 font-black">
                             <Icon name="Plus" size={20} /> 新規情報を追加
                         </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Shift Bulk Registration Modal ---
+        function ShiftBulkModal({ date, existingShifts, onClose, onSave }) {
+            const [selectedDate, setSelectedDate] = useState(date || new Date().toLocaleDateString('sv-SE'));
+            const [taniguchiHoliday, setTaniguchiHoliday] = useState(existingShifts.some(s => s.taniguchiHoliday));
+            
+            const [assignments, setAssignments] = useState(() => {
+                const initial = {};
+                TIME_SLOTS.forEach(slot => {
+                    initial[slot] = existingShifts.filter(s => s.timeSlot === slot).map(s => s.staff);
+                });
+                return initial;
+            });
+
+            const [isSaving, setIsSaving] = useState(false);
+
+            const toggleStaff = (slot, staff) => {
+                setAssignments(prev => {
+                    const current = prev[slot] || [];
+                    if (current.includes(staff)) {
+                        return { ...prev, [slot]: current.filter(s => s !== staff) };
+                    } else {
+                        return { ...prev, [slot]: [...current, staff] };
+                    }
+                });
+            };
+
+            const handleSave = async () => {
+                setIsSaving(true);
+                const flatShifts = [];
+                Object.entries(assignments).forEach(([slot, staffs]) => {
+                    staffs.forEach(staff => {
+                        flatShifts.push({
+                            date: selectedDate,
+                            timeSlot: slot,
+                            staff: staff,
+                            taniguchiHoliday: taniguchiHoliday
+                        });
+                    });
+                });
+                
+                if (flatShifts.length === 0 && taniguchiHoliday) {
+                    flatShifts.push({
+                        date: selectedDate,
+                        timeSlot: "OFF",
+                        staff: "NONE",
+                        taniguchiHoliday: true
+                    });
+                }
+
+                await onSave(selectedDate, flatShifts);
+                setIsSaving(false);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1500] flex items-end sm:items-center justify-center p-4 font-black">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-5">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black">シフト一括登録</h3>
+                            <button onClick={onClose} className="p-2 text-slate-400 font-black">✕</button>
+                        </div>
+
+                        <div className="space-y-6 text-left">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                                <div className="space-y-1 flex-1 w-full">
+                                    <label className="text-[10px] text-slate-400 uppercase font-black pl-2">対象日</label>
+                                    <input type="date" className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black outline-none" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+                                </div>
+                                <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 px-5 py-3 rounded-2xl cursor-pointer active:scale-95 transition-all" onClick={() => setTaniguchiHoliday(!taniguchiHoliday)}>
+                                    <input type="checkbox" className="w-5 h-5 accent-rose-600 rounded" checked={taniguchiHoliday} readOnly />
+                                    <span className="text-sm font-black text-rose-600">谷口休み</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {TIME_SLOTS.map(slot => (
+                                    <div key={slot} className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">{slot}</span>
+                                            <div className="h-[1px] flex-1 bg-slate-100"></div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {STAFF_LIST.map(staff => {
+                                                const isActive = assignments[slot]?.includes(staff);
+                                                return (
+                                                    <button
+                                                        key={staff}
+                                                        onClick={() => toggleStaff(slot, staff)}
+                                                        className={`px-3 py-2 rounded-xl text-[11px] font-black transition-all border ${
+                                                            isActive 
+                                                            ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
+                                                            : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        {staff}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button onClick={handleSave} disabled={isSaving} className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all mt-4">
+                                {isSaving ? "保存中..." : "この内容で保存する"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
@@ -454,7 +674,7 @@
                                         </>
                                     ) : (
                                         <>
-                                            <label className="text-[10px] text-slate-400 uppercase pl-2 font-black">{f.label}</label>
+                                            <label className="text-[10px] text-slate-400 uppercase font-black pl-2">{f.label}</label>
                                             {f.type === 'select' ? (
                                                 <select className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black outline-none" value={formData[f.name]} onChange={e => setFormData({...formData, [f.name]: e.target.value})}>
                                                     {f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -471,7 +691,7 @@
                             </div>
                             {hasImage && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] text-slate-400 uppercase pl-2 font-black">写真 (追加・削除可能)</label>
+                                    <label className="text-[10px] text-slate-400 uppercase font-black pl-2">写真 (追加・削除可能)</label>
                                     <div className="flex gap-2 overflow-x-auto py-2">
                                         {images.map((img, i) => (
                                             <div key={i} className="relative shrink-0">
@@ -507,6 +727,7 @@
             const [inventoryItems, setInventoryItems] = useState([]);
             const [manuals, setManuals] = useState([]);
             const [bookings, setBookings] = useState([]);
+            const [shifts, setShifts] = useState([]);
 
             // Modals
             const [showAddMaintenance, setShowAddMaintenance] = useState(false);
@@ -517,47 +738,63 @@
             const [showAddManual, setShowAddManual] = useState(false);
             const [showAddBooking, setShowAddBooking] = useState(false);
             const [editingBooking, setEditingBooking] = useState(null);
+            const [showShiftBulk, setShowShiftBulk] = useState(false);
+            const [selectedShiftDate, setSelectedShiftDate] = useState(null);
             const [selectedDayDetail, setSelectedDayDetail] = useState(null);
             const [selectedImage, setSelectedImage] = useState(null);
             const [showArchive, setShowArchive] = useState(false);
 
             const { methods, auth, db, appId, initialToken } = window.FirebaseSDK;
 
+            // 初期化 & 認証
             useEffect(() => {
-                const init = async () => {
+                const initAuth = async () => {
                     try {
-                        if (initialToken) {
-                            try { await methods.signInWithCustomToken(auth, initialToken); }
-                            catch (e) { await methods.signInAnonymously(auth); }
-                        } else { await methods.signInAnonymously(auth); }
-                    } catch (err) { console.error("Auth error:", err); }
-                    const unsub = methods.onAuthStateChanged(auth, u => setUser(u));
-                    return unsub;
+                        if (typeof initialToken !== 'undefined' && initialToken) {
+                            try {
+                                await methods.signInWithCustomToken(auth, initialToken);
+                            } catch (tokenErr) {
+                                await methods.signInAnonymously(auth);
+                            }
+                        } else {
+                            await methods.signInAnonymously(auth);
+                        }
+                    } catch (err) { 
+                        console.error("Auth System Error:", err);
+                    }
                 };
-                init();
-            }, []);
+                initAuth();
+                const unsubscribe = methods.onAuthStateChanged(auth, u => setUser(u));
+                return () => unsubscribe();
+            }, [auth, initialToken]);
 
+            // データ購読
             useEffect(() => {
                 if (!user) return;
+                const queryOptions = { error: (err) => console.error("Snapshot error:", err) };
+
                 const unsubMaint = methods.onSnapshot(methods.collection(db, 'artifacts', appId, 'public', 'data', 'maintenance_records'), snap => {
                     setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-                });
+                }, queryOptions.error);
                 const unsubInv = methods.onSnapshot(methods.collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), snap => {
                     setInventoryItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
+                }, queryOptions.error);
                 const unsubManual = methods.onSnapshot(methods.collection(db, 'artifacts', appId, 'public', 'data', 'manuals'), snap => {
                     setManuals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
+                }, queryOptions.error);
                 const unsubBooking = methods.onSnapshot(methods.collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), snap => {
                     setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
-                return () => { unsubMaint(); unsubInv(); unsubManual(); unsubBooking(); };
-            }, [user]);
+                }, queryOptions.error);
+                const unsubShift = methods.onSnapshot(methods.collection(db, 'artifacts', appId, 'public', 'data', 'shifts'), snap => {
+                    setShifts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                }, queryOptions.error);
+                return () => { unsubMaint(); unsubInv(); unsubManual(); unsubBooking(); unsubShift(); };
+            }, [user, appId, db]);
 
             const handleSave = async (col, data) => {
                 if (!user) return;
                 try {
-                    await methods.addDoc(methods.collection(db, 'artifacts', appId, 'public', 'data', col), { ...data, createdAt: methods.serverTimestamp() });
+                    await methods.addDoc(methods.collection(db, 'artifacts', appId, 'public', 'data', col), { ...data, createdAt: methods.serverTimestamp(), updatedAt: methods.serverTimestamp(), userId: user.uid });
                 } catch(e) { console.error("Save Error:", e); }
             };
 
@@ -576,13 +813,19 @@
                 } catch(e) { console.error("Delete Error:", e); }
             };
 
+            const handleSaveShiftBulk = async (date, newShifts) => {
+                if (!user) return;
+                try {
+                    const existingToday = shifts.filter(s => s.date === date);
+                    for (const s of existingToday) { await methods.deleteDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', 'shifts', s.id)); }
+                    for (const s of newShifts) { await methods.addDoc(methods.collection(db, 'artifacts', appId, 'public', 'data', 'shifts'), { ...s, createdAt: methods.serverTimestamp(), userId: user.uid }); }
+                } catch(e) { console.error("Shift Bulk Save Error:", e); }
+            };
+
             const filteredMaintenance = useMemo(() => {
                 const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
                 if (!maintenanceSearch) return base;
-                return base.filter(r => 
-                    (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || 
-                    (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())
-                );
+                return base.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase()));
             }, [records, selectedFacility, maintenanceSearch]);
 
             const bookingFields = [
@@ -598,73 +841,55 @@
                 { name: 'notes', label: '備考事項', type: 'textarea', required: false }
             ];
 
-            if (!user) return <div className="min-h-screen flex items-center justify-center font-black text-slate-400">認証情報を読み込み中...</div>;
+            if (!user) return (
+                <div className="min-h-screen flex flex-col items-center justify-center font-black text-slate-400 bg-slate-50 gap-4">
+                    <Icon name="RefreshCw" className="animate-spin" size={32} color="#6366F1" />
+                    <p>同期を開始しています...</p>
+                </div>
+            );
 
             return (
-                <div className="min-h-screen pb-24 selection:bg-indigo-100 overflow-x-hidden bg-slate-50 font-sans font-black">
+                <div className="min-h-screen pb-24 selection:bg-indigo-100 overflow-x-hidden bg-slate-50 font-sans font-black text-left">
                     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm font-black">
                         <h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter">
                             <Icon name="RefreshCw" size={20} color="#6366F1" fill="currentColor" />
                             <span>Portal</span>
                         </h1>
-                        <select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black shadow-sm">
+                        <select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black shadow-sm outline-none">
                             <option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                     </header>
 
                     <main className="p-4 max-w-md mx-auto space-y-6">
                         {activeTab === 'schedule' && <ScheduleSection bookings={bookings} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
-                        
+                        {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
                         {activeTab === 'maintenance' && (
                             <div className="space-y-6 animate-in fade-in text-left font-black">
                                 <div className="flex justify-between items-center px-1 font-black">
                                     <h2 className="text-sm text-slate-400 uppercase italic tracking-widest">{showArchive ? "All Archives" : "Latest Reports"}</h2>
                                     <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>
                                 </div>
-
-                                <div className="px-1">
-                                    <div className="relative">
-                                        <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
-                                        <input type="text" placeholder="メンテ報告を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} />
-                                    </div>
+                                <div className="relative px-1">
+                                    <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
+                                    <input type="text" placeholder="メンテ報告を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} />
                                 </div>
-
                                 <div className="space-y-4">
-                                    {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10))
-                                        .map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} />)}
+                                    {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10)).map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} />)}
                                 </div>
                                 <div className="pt-4 font-black">
                                     <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-500 font-black shadow-sm active:scale-95 transition-all">
-                                        <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />
-                                        {showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
+                                        <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />{showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
                                     </button>
                                 </div>
                             </div>
                         )}
-
-                        {activeTab === 'inventory' && (
-                            <div className="space-y-4 font-black">
-                                <InventorySection 
-                                    items={inventoryItems} 
-                                    onOpenAdd={() => setShowAddInventory(true)} 
-                                    onEdit={setEditingInventoryItem}
-                                    onDelete={id => handleDelete('inventory', id)}
-                                    onUpdateStock={(id, v) => {
-                                        methods.updateDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', 'inventory', id), { stock: Math.max(0, v), lastChecked: new Date().toISOString() });
-                                    }} 
-                                />
-                            </div>
-                        )}
-
-                        {activeTab === 'manual' && (
-                            <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => {
-                                const el = document.body.appendChild(document.createElement('textarea')); el.value = txt; el.select(); document.execCommand('copy'); el.remove();
-                            }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />
-                        )}
+                        {activeTab === 'inventory' && <div className="space-y-4 font-black"><InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={(id, v) => handleUpdate('inventory', id, { stock: Math.max(0, v), lastChecked: new Date().toISOString() })} /></div>}
+                        {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const el = document.body.appendChild(document.createElement('textarea')); el.value = txt; el.select(); document.execCommand('copy'); el.remove(); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                     </main>
 
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] font-black">
-                        <NavItem active={activeTab === 'schedule'} iconName="Calendar" label="宿泊" onClick={() => setActiveTab('schedule')} />
+                        <NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} />
+                        <NavItem active={activeTab === 'shift'} iconName="Calendar" label="シフト" onClick={() => setActiveTab('shift')} />
                         <NavItem active={activeTab === 'maintenance'} iconName="Wrench" label="メンテ" onClick={() => setActiveTab('maintenance')} />
                         <NavItem active={activeTab === 'inventory'} iconName="Package" label="備品" onClick={() => setActiveTab('inventory')} />
                         <NavItem active={activeTab === 'manual'} iconName="BookOpen" label="マニュアル" onClick={() => setActiveTab('manual')} />
@@ -672,85 +897,51 @@
 
                     {/* Modals */}
                     {showAddBooking && <AddModal title="予約登録" onClose={() => setShowAddBooking(false)} onSave={d => handleSave('bookings', d)} fields={bookingFields} />}
-                    
                     {editingBooking && <AddModal title="予約編集" initialData={editingBooking} onClose={() => setEditingBooking(null)} onSave={d => handleUpdate('bookings', editingBooking.id, d)} fields={bookingFields} />}
-
-                    {showAddMaintenance && <AddModal title="メンテナンス報告" onClose={() => setShowAddMaintenance(false)} onSave={d => handleSave('maintenance_records', d)} hasImage fields={[
-                        { name: 'facility', label: '施設', type: 'select', options: FACILITIES },
-                        { name: 'staff', label: '担当者名', type: 'text' },
-                        { name: 'task', label: '内容', type: 'textarea' },
-                        { name: 'date', label: '日付', type: 'date', default: new Date().toLocaleDateString('sv-SE') }
-                    ]} />}
-
-                    {editingMaintenanceRecord && <AddModal 
-                        title="メンテナンス情報の編集" 
-                        initialData={editingMaintenanceRecord}
-                        onClose={() => setEditingMaintenanceRecord(null)} 
-                        onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} 
-                        hasImage 
-                        fields={[
-                            { name: 'facility', label: '施設', type: 'select', options: FACILITIES },
-                            { name: 'staff', label: '担当者名', type: 'text' },
-                            { name: 'task', label: '内容', type: 'textarea' },
-                            { name: 'date', label: '日付', type: 'date' }
-                        ]} 
-                    />}
-
-                    {showAddInventory && <AddModal title="備品登録" onClose={() => setShowAddInventory(false)} onSave={d => handleSave('inventory', { ...d, lastChecked: new Date().toISOString() })} hasImage fields={[
-                        { name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS },
-                        { name: 'name', label: '品名', type: 'text' },
-                        { name: 'stock', label: '現在の在庫数', type: 'number', default: 0 },
-                        { name: 'threshold', label: '補充アラート個数', type: 'number', default: 5 }
-                    ]} />}
-
-                    {editingInventoryItem && <AddModal 
-                        title="備品情報の編集" 
-                        initialData={editingInventoryItem}
-                        onClose={() => setEditingInventoryItem(null)} 
-                        onSave={d => handleUpdate('inventory', editingInventoryItem.id, d)} 
-                        hasImage 
-                        fields={[
-                            { name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS },
-                            { name: 'name', label: '品名', type: 'text' },
-                            { name: 'stock', label: '在庫数', type: 'number' },
-                            { name: 'threshold', label: '補充アラート個数', type: 'number' }
-                        ]} 
-                    />}
-
-                    {showAddManual && <AddModal title="マニュアル投稿" onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', d)} hasImage fields={[
-                        { name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] },
-                        { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES },
-                        { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS },
-                        { name: 'title', label: 'タイトル', type: 'text' },
-                        { name: 'content', label: '内容', type: 'textarea' }
-                    ]} />}
+                    {showShiftBulk && <ShiftBulkModal date={selectedShiftDate || new Date().toLocaleDateString('sv-SE')} existingShifts={shifts.filter(s => s.date === (selectedShiftDate || new Date().toLocaleDateString('sv-SE')))} onClose={() => setShowShiftBulk(false)} onSave={handleSaveShiftBulk} />}
+                    {showAddMaintenance && <AddModal title="メンテナンス報告" onClose={() => setShowAddMaintenance(false)} onSave={d => handleSave('maintenance_records', d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date', default: new Date().toLocaleDateString('sv-SE') }]} />}
+                    {editingMaintenanceRecord && <AddModal title="メンテナンス編集" initialData={editingMaintenanceRecord} onClose={() => setEditingMaintenanceRecord(null)} onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date' }]} />}
+                    {showAddInventory && <AddModal title="備品登録" onClose={() => setShowAddInventory(false)} onSave={d => handleSave('inventory', { ...d, lastChecked: new Date().toISOString() })} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number', default: 0 }, { name: 'threshold', label: '補充アラート数', type: 'number', default: 5 }]} />}
+                    {editingInventoryItem && <AddModal title="備品編集" initialData={editingInventoryItem} onClose={() => setEditingInventoryItem(null)} onSave={d => handleUpdate('inventory', editingInventoryItem.id, d)} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number' }, { name: 'threshold', label: '補充アラート数', type: 'number' }]} />}
+                    {showAddManual && <AddModal title="マニュアル投稿" onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', d)} hasImage fields={[{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
 
                     {selectedDayDetail && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 text-slate-800">
-                                <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-black">{selectedDayDetail.day.replace(/-/g, '/')} の詳細</h3></div><button onClick={() => setSelectedDayDetail(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
+                                <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-black">{selectedDayDetail.day.replace(/-/g, '/')} の宿泊詳細</h3></div><button onClick={() => setSelectedDayDetail(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
                                 <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar font-black text-left">
-                                    {selectedDayDetail.bookings.map(b => (
-                                        <div key={b.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 relative font-black">
-                                            <div className="flex items-center gap-2 mb-2 font-black">
-                                                <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span>
-                                                <span className="text-[10px] text-slate-400 uppercase font-black">{b.facility} · {b.people}名</span>
+                                    {selectedDayDetail.bookings.map(b => {
+                                        const isIN = b.startDate === selectedDayDetail.day;
+                                        const isOUT = b.endDate === selectedDayDetail.day;
+                                        // startDate <= currentDay < endDate なら「IN中」
+                                        const isStaying = selectedDayDetail.day >= b.startDate && selectedDayDetail.day < b.endDate && !isIN;
+                                        
+                                        const statusLabel = isIN ? "IN" : isOUT ? "OUT" : isStaying ? "IN中" : "予約";
+                                        const statusColor = isIN ? "bg-emerald-500" : isOUT ? "bg-rose-500" : "bg-indigo-500";
+                                        
+                                        return (
+                                            <div key={b.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 relative font-black">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span>
+                                                        <span className="text-[10px] text-slate-400 uppercase font-black">{b.facility} · {b.people}名</span>
+                                                    </div>
+                                                    <span className={`${statusColor} text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-sm`}>{statusLabel}</span>
+                                                </div>
+                                                <div className="text-slate-800 text-lg font-black pr-16">{b.guestName} 様</div>
+                                                <div className="text-[10px] text-indigo-400 font-bold mt-1 bg-white inline-block px-2 py-0.5 rounded border border-indigo-50 uppercase tracking-tighter">
+                                                    {formatMMDD(b.startDate)} - {formatMMDD(b.endDate)}
+                                                </div>
+                                                <BookingOptions booking={b} />
+                                                
+                                                {/* アイコンボタンを右下に配置してステータスとの重なりを回避 */}
+                                                <div className="absolute bottom-4 right-4 flex gap-3">
+                                                    <button onClick={() => { setEditingBooking(b); setSelectedDayDetail(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors"><Icon name="Edit3" size={16} /></button>
+                                                    <button onClick={() => handleDelete('bookings', b.id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Icon name="Trash2" size={16} /></button>
+                                                </div>
                                             </div>
-                                            <div className="text-slate-800 text-lg font-black">{b.guestName} 様</div>
-                                            <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase">{b.startDate} → {b.endDate}</div>
-                                            
-                                            <BookingOptions booking={b} />
-
-                                            <div className="absolute top-4 right-4 flex gap-3">
-                                                <button onClick={() => { setEditingBooking(b); setSelectedDayDetail(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors font-black">
-                                                    <Icon name="Edit3" size={16} />
-                                                </button>
-                                                <button onClick={() => handleDelete('bookings', b.id)} className="text-slate-300 hover:text-rose-500 transition-colors font-black">
-                                                    <Icon name="Trash2" size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     {selectedDayDetail.bookings.length === 0 && <div className="text-center py-10 text-slate-300 italic font-black">予定なし</div>}
                                 </div>
                                 <button onClick={() => setSelectedDayDetail(null)} className="mt-6 w-full py-4 bg-slate-800 text-white font-black rounded-2xl">閉じる</button>
@@ -759,9 +950,9 @@
                     )}
                     
                     {selectedImage && (
-                        <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4 font-black" onClick={() => setSelectedImage(null)}>
-                            <button className="absolute top-6 right-6 text-white font-black"><Icon name="X" size={32} /></button>
-                            <img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl font-black" />
+                        <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
+                            <button className="absolute top-6 right-6 text-white"><Icon name="X" size={32} /></button>
+                            <img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl" />
                         </div>
                     )}
                 </div>
@@ -772,11 +963,7 @@
         function InventorySection({ items, onOpenAdd, onUpdateStock, onEdit, onDelete }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterLoc, setFilterLoc] = useState('All');
-
-            const lowStockItems = useMemo(() => {
-                return items.filter(item => Number(item.stock) <= Number(item.threshold || 5));
-            }, [items]);
-
+            const lowStockItems = useMemo(() => items.filter(item => Number(item.stock) <= Number(item.threshold || 5)), [items]);
             const grouped = useMemo(() => {
                 const filtered = items.filter(i => (i.name || "").toLowerCase().includes(searchTerm.toLowerCase()) && (filterLoc === 'All' || i.location === filterLoc));
                 const groups = {};
@@ -787,66 +974,21 @@
                 });
                 return Object.values(groups).sort((a,b) => a.name.localeCompare(b.name, 'ja'));
             }, [items, searchTerm, filterLoc]);
-
             return (
                 <div className="space-y-4 animate-in fade-in font-black pb-10 text-left">
                     {lowStockItems.length > 0 && (
                         <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm">
-                            <div className="flex items-center gap-2 text-rose-600 font-black text-sm">
-                                <Icon name="AlertTriangle" size={18} />
-                                <span>補充が必要です ({lowStockItems.length}件)</span>
-                            </div>
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                                {lowStockItems.map(item => (
-                                    <div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">
-                                        {item.name} ({item.location})
-                                    </div>
-                                ))}
-                            </div>
+                            <div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div>
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div>
                         </div>
                     )}
-
-                    <div className="relative">
-                        <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
-                        <input type="text" placeholder="品目検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                        {['All', ...INVENTORY_LOCATIONS].map(l => (
-                            <button key={l} onClick={() => setFilterLoc(l)} className={`px-4 py-1.5 rounded-full border text-[11px] whitespace-nowrap transition-all font-black ${filterLoc === l ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}>{l === 'All' ? '全拠点' : l}</button>
-                        ))}
-                    </div>
-
+                    <div className="relative"><Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black" /><input type="text" placeholder="品目検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['All', ...INVENTORY_LOCATIONS].map(l => (<button key={l} onClick={() => setFilterLoc(l)} className={`px-4 py-1.5 rounded-full border text-[11px] whitespace-nowrap transition-all font-black ${filterLoc === l ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}>{l === 'All' ? '全拠点' : l}</button>))}</div>
                     <div className="space-y-4">
                         {grouped.map(g => (
                             <div key={g.name} className={`bg-white rounded-[2rem] border overflow-hidden shadow-sm font-black ${g.low ? 'border-rose-200' : 'border-slate-100'}`}>
-                                <div className={`p-4 flex items-center gap-3 font-black ${g.low ? 'bg-rose-50/30' : 'bg-slate-50/10'}`}>
-                                    <div className="w-12 h-12 bg-white rounded-xl border flex items-center justify-center font-black shrink-0">
-                                        {g.items[0]?.images?.[0] ? <img src={g.items[0].images[0]} className="w-full h-full object-cover rounded-xl" /> : <Icon name="Package" size={20} color={g.low ? "#F43F5E" : "#CBD5E1"} />}
-                                    </div>
-                                    <div className="flex-1 min-w-0 font-black"><h3 className="text-sm font-black truncate">{g.name}</h3><div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div></div>
-                                    <div className={`text-xl font-black ${g.low ? 'text-rose-600' : 'text-indigo-600'}`}>{g.total}</div>
-                                </div>
-                                <div className="divide-y divide-slate-50">
-                                    {g.items.map(item => (
-                                        <div key={item.id} className="p-4 flex justify-between items-center group">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span>
-                                                    <span className="text-[9px] text-slate-300">アラート: {item.threshold || 5}</span>
-                                                </div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => onEdit(item)} className="text-[10px] text-indigo-400 font-black">編集</button>
-                                                    <button onClick={() => onDelete(item.id)} className="text-[10px] text-rose-400 font-black">削除</button>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black">
-                                                <button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button>
-                                                <span className="text-xs font-black w-6 text-center">{item.stock}</span>
-                                                <button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <div className={`p-4 flex items-center gap-3 font-black ${g.low ? 'bg-rose-50/30' : 'bg-slate-50/10'}`}><div className="w-12 h-12 bg-white rounded-xl border flex items-center justify-center font-black shrink-0">{g.items[0]?.images?.[0] ? <img src={g.items[0].images[0]} className="w-full h-full object-cover rounded-xl" /> : <Icon name="Package" size={20} color={g.low ? "#F43F5E" : "#CBD5E1"} />}</div><div className="flex-1 min-w-0 font-black"><h3 className="text-sm font-black truncate">{g.name}</h3><div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div></div><div className={`text-xl font-black ${g.low ? 'text-rose-600' : 'text-indigo-600'}`}>{g.total}</div></div>
+                                <div className="divide-y divide-slate-50">{g.items.map(item => (<div key={item.id} className="p-4 flex justify-between items-center group"><div className="flex flex-col gap-1"><div className="flex items-center gap-2"><span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => onEdit(item)} className="text-[10px] text-indigo-400 font-black">編集</button><button onClick={() => onDelete(item.id)} className="text-[10px] text-rose-400 font-black">削除</button></div></div><div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black"><button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button><span className="text-xs font-black w-6 text-center">{item.stock}</span><button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button></div></div>))}</div>
                             </div>
                         ))}
                     </div>
