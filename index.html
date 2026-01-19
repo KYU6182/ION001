@@ -15,7 +15,8 @@
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
         .calendar-grid { display: grid; grid-template-cols: repeat(7, 1fr); gap: 2px; background-color: #f1f5f9; border-radius: 20px; overflow: hidden; }
-        .day-cell { min-height: 85px; background-color: white; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all 0.2s; }
+        /* セルの高さを確保してシフトを見やすく修正 */
+        .day-cell { min-height: 100px; background-color: white; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all 0.2s; }
         .day-cell:active { background-color: #f8fafc; transform: scale(0.98); }
         .booking-dot { width: 6px; height: 6px; border-radius: 50%; }
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
@@ -23,7 +24,6 @@
         /* シフトカレンダー用の小さいチップ */
         .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
         
-        /* 選択モード時のアニメーション */
         .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
@@ -310,14 +310,15 @@
                                         <div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div>
                                         <div className="w-full flex flex-col items-center overflow-hidden">
                                             {dayShifts.map((s, idx) => (
-                                                idx < 4 && s.staff !== "NONE" && (
+                                                /* idx < 5 に増やし 21:00 以降も表示されるように修正 */
+                                                idx < 6 && s.staff !== "NONE" && (
                                                     <div key={s.id} className="shift-chip bg-slate-50 text-slate-600 border-slate-100">
                                                         <span className="text-[5px] text-indigo-400 block">{s.timeSlot.split('-')[0]}..</span>
                                                         {s.staff}
                                                     </div>
                                                 )
                                             ))}
-                                            {dayShifts.filter(s => s.staff !== "NONE").length > 4 && <div className="text-[6px] text-slate-300">+ more</div>}
+                                            {dayShifts.filter(s => s.staff !== "NONE").length > 6 && <div className="text-[6px] text-slate-300">+ more</div>}
                                             {hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">谷口休</div>}
                                         </div>
                                     </div>
@@ -442,7 +443,7 @@
                         <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                             {['すべて', ...MANUAL_TAGS].map(t => (
-                                <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
+                                <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
                             ))}
                         </div>
                     </div>
@@ -779,7 +780,6 @@
                 });
                 text += "\n詳細はこちら→https://ion0002.pages.dev/";
 
-                // Copy to clipboard (legacy method for iFrame compatibility)
                 const textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -816,13 +816,6 @@
                 { name: 'notes', label: '備考事項', type: 'textarea', required: false }
             ];
 
-            if (!user) return (
-                <div className="min-h-screen flex flex-col items-center justify-center font-black text-slate-400 bg-slate-50 gap-4">
-                    <Icon name="RefreshCw" className="animate-spin" size={32} color="#6366F1" />
-                    <p>同期を開始しています...</p>
-                </div>
-            );
-
             return (
                 <div className="min-h-screen pb-24 selection:bg-indigo-100 overflow-x-hidden bg-slate-50 font-sans font-black text-left">
                     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm font-black">
@@ -836,57 +829,67 @@
                     </header>
 
                     <main className="p-4 max-w-md mx-auto space-y-6">
-                        {activeTab === 'schedule' && <ScheduleSection bookings={bookings} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
-                        {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
-                        {activeTab === 'maintenance' && (
-                            <div className="space-y-6 animate-in fade-in text-left font-black">
-                                <div className="flex justify-between items-center px-1 font-black">
-                                    <h2 className="text-sm text-slate-400 uppercase italic tracking-widest">{isSelectionMode ? "Select to Report" : (showArchive ? "All Archives" : "Latest Reports")}</h2>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => {
-                                                setIsSelectionMode(!isSelectionMode);
-                                                setSelectedMaintIds(new Set());
-                                            }} 
-                                            className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full shadow-md flex items-center gap-1 font-black transition-all`}
-                                        >
-                                            <Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />
-                                            {isSelectionMode ? "キャンセル" : "LINEで報告"}
-                                        </button>
+                        {/* 認証待機中でも枠組みを出すことで「開いた感」を演出。データのみ遅延読み込みにする */}
+                        {!user ? (
+                            <div className="flex flex-col items-center justify-center py-40 font-black text-slate-400 gap-4">
+                                <Icon name="RefreshCw" className="animate-spin" size={32} color="#6366F1" />
+                                <p>同期を開始しています...</p>
+                            </div>
+                        ) : (
+                            <>
+                                {activeTab === 'schedule' && <ScheduleSection bookings={bookings} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
+                                {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
+                                {activeTab === 'maintenance' && (
+                                    <div className="space-y-6 animate-in fade-in text-left font-black">
+                                        <div className="flex justify-between items-center px-1 font-black">
+                                            <h2 className="text-sm text-slate-400 uppercase italic tracking-widest">{isSelectionMode ? "Select to Report" : (showArchive ? "All Archives" : "Latest Reports")}</h2>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => {
+                                                        setIsSelectionMode(!isSelectionMode);
+                                                        setSelectedMaintIds(new Set());
+                                                    }} 
+                                                    className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full shadow-md flex items-center gap-1 font-black transition-all`}
+                                                >
+                                                    <Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />
+                                                    {isSelectionMode ? "キャンセル" : "LINEで報告"}
+                                                </button>
+                                                {!isSelectionMode && (
+                                                    <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="relative px-1">
+                                            <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
+                                            <input type="text" placeholder="メンテ報告を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-4">
+                                            {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10)).map(r => (
+                                                <MaintenanceCard 
+                                                    key={r.id} 
+                                                    record={r} 
+                                                    onDelete={id => handleDelete('maintenance_records', id)} 
+                                                    onEdit={setEditingMaintenanceRecord} 
+                                                    onImageClick={setSelectedImage} 
+                                                    selectionMode={isSelectionMode}
+                                                    isSelected={selectedMaintIds.has(r.id)}
+                                                    onToggleSelection={() => toggleLineSelection(r.id)}
+                                                />
+                                            ))}
+                                        </div>
                                         {!isSelectionMode && (
-                                            <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>
+                                            <div className="pt-4 font-black">
+                                                <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-500 font-black shadow-sm active:scale-95 transition-all">
+                                                    <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />{showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-                                <div className="relative px-1">
-                                    <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
-                                    <input type="text" placeholder="メンテ報告を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} />
-                                </div>
-                                <div className="space-y-4">
-                                    {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10)).map(r => (
-                                        <MaintenanceCard 
-                                            key={r.id} 
-                                            record={r} 
-                                            onDelete={id => handleDelete('maintenance_records', id)} 
-                                            onEdit={setEditingMaintenanceRecord} 
-                                            onImageClick={setSelectedImage} 
-                                            selectionMode={isSelectionMode}
-                                            isSelected={selectedMaintIds.has(r.id)}
-                                            onToggleSelection={() => toggleLineSelection(r.id)}
-                                        />
-                                    ))}
-                                </div>
-                                {!isSelectionMode && (
-                                    <div className="pt-4 font-black">
-                                        <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-500 font-black shadow-sm active:scale-95 transition-all">
-                                            <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />{showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
-                                        </button>
-                                    </div>
                                 )}
-                            </div>
+                                {activeTab === 'inventory' && <div className="space-y-4 font-black"><InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={(id, v) => handleUpdate('inventory', id, { stock: Math.max(0, v), lastChecked: new Date().toISOString() })} /></div>}
+                                {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const el = document.body.appendChild(document.createElement('textarea')); el.value = txt; el.select(); document.execCommand('copy'); el.remove(); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
+                            </>
                         )}
-                        {activeTab === 'inventory' && <div className="space-y-4 font-black"><InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={(id, v) => handleUpdate('inventory', id, { stock: Math.max(0, v), lastChecked: new Date().toISOString() })} /></div>}
-                        {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const el = document.body.appendChild(document.createElement('textarea')); el.value = txt; el.select(); document.execCommand('copy'); el.remove(); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                     </main>
 
                     {/* Toast Message */}
