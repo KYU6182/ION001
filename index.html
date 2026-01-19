@@ -19,9 +19,11 @@
         .day-cell:active { background-color: #f8fafc; transform: scale(0.98); }
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 2px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
         
+        /* 宿泊バッジ：オプション記号を含む */
         .booking-badge { font-size: 6px; font-weight: 900; color: white; padding: 1px 2px; border-radius: 2px; width: 98%; text-align: center; margin-bottom: 1px; line-height: 1.1; }
         .badge-options { font-size: 5px; opacity: 0.9; margin-left: 2px; letter-spacing: -0.5px; }
         
+        /* シフトバッジ */
         .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
         
         .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -93,9 +95,15 @@
             return `${d.getMonth() + 1}/${d.getDate()}`;
         }
 
-        function formatDateTime(isoString) {
-            if (!isoString) return '未確認';
-            const date = new Date(isoString);
+        function formatDateTime(isoOrTimestamp) {
+            if (!isoOrTimestamp) return '未確認';
+            let date;
+            if (isoOrTimestamp.seconds) {
+                date = new Date(isoOrTimestamp.seconds * 1000);
+            } else {
+                date = new Date(isoOrTimestamp);
+            }
+            if (isNaN(date.getTime())) return '未確認';
             const now = new Date();
             const isToday = date.toDateString() === now.toDateString();
             const datePart = isToday ? "今日" : `${date.getMonth() + 1}/${date.getDate()}`;
@@ -126,8 +134,7 @@
             });
         }
 
-        // --- Low-level UI Components ---
-
+        // --- UI Shared Components ---
         function NavItem({ active, iconName, label, onClick }) {
             return (
                 <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all active:scale-90 flex-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -164,6 +171,7 @@
             );
         }
 
+        // --- Modals ---
         function AddModal({ title, onClose, onSave, fields, hasImage, initialData = null }) {
             const initial = {}; 
             fields.forEach(f => { 
@@ -220,24 +228,18 @@
             );
         }
 
-        // --- Card Components ---
+        // --- Cards ---
 
-        function MaintenanceCard({ record, onDelete, onEdit, onImageClick, selectionMode, isSelected, onToggleSelection }) {
-            const postDate = new Date(record.date || record.createdAt?.seconds * 1000 || Date.now());
-            const isToday = postDate.toDateString() === new Date().toDateString();
+        function MaintenanceCard({ record, onDelete, onEdit, onAddUpdate, onImageClick, selectionMode, isSelected, onToggleSelection }) {
+            const displayTime = formatDateTime(record.createdAt || record.date);
+            const isToday = displayTime.includes("今日");
 
             return (
                 <div 
                     onClick={selectionMode ? onToggleSelection : undefined} 
                     className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}
                 >
-                    {selectionMode && (
-                        <div className="absolute top-4 right-4 z-10">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
-                                {isSelected && <Icon name="Check" size={12} strokeWidth={4} />}
-                            </div>
-                        </div>
-                    )}
+                    {selectionMode && (<div className="absolute top-4 right-4 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>{isSelected && <Icon name="Check" size={12} strokeWidth={4} />}</div></div>)}
                     <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span>
@@ -246,28 +248,71 @@
                         </div>
                     </div>
                     <p className="text-slate-700 text-sm font-bold mb-4 whitespace-pre-wrap leading-relaxed">{record.task}</p>
-                    {record.images && record.images.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
-                            {record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}
+                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">{record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
+                    
+                    {record.updates && record.updates.length > 0 && (
+                        <div className="mt-4 space-y-4 border-l-2 border-slate-100 pl-4">
+                            {record.updates.map((up, i) => (
+                                <div key={i} className="relative">
+                                    <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white"></div>
+                                    <p className="text-slate-600 text-xs font-bold leading-relaxed mb-2">{up.comment}</p>
+                                    {up.images && up.images.length > 0 && (
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-2">
+                                            {up.images.map((img, j) => <img key={j} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-14 h-14 object-cover rounded-lg shrink-0" />)}
+                                        </div>
+                                    )}
+                                    <div className="text-[9px] text-slate-300 font-black">{formatDateTime(up.updatedAt)}</div>
+                                </div>
+                            ))}
                         </div>
                     )}
-                    <div className="flex justify-between items-end text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
+
+                    <div className="flex justify-between items-end text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50 mt-4">
                         <div className="flex flex-col">
                             <span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span>
-                            <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
+                            <span>{displayTime}</span>
                         </div>
                         {!selectionMode && (
-                            <div className="flex gap-2">
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-indigo-600 active:scale-90 transition-all flex items-center gap-1">
-                                    <Icon name="Edit3" size={14} />
-                                    <span>編集</span>
+                            <div className="flex gap-1.5">
+                                <button onClick={(e) => { e.stopPropagation(); onAddUpdate(record); }} className="bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl hover:bg-indigo-100 active:scale-90 transition-all flex items-center gap-1">
+                                    <Icon name="MessageSquarePlus" size={14} />
+                                    <span>追記</span>
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-rose-600 active:scale-90 transition-all flex items-center gap-1">
-                                    <Icon name="Trash2" size={14} />
-                                    <span>削除</span>
-                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-indigo-600 active:scale-90 transition-all"><Icon name="Edit3" size={14} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-rose-600 active:scale-90 transition-all"><Icon name="Trash2" size={14} /></button>
                             </div>
                         )}
+                    </div>
+                </div>
+            );
+        }
+
+        function TroubleCard({ record, onEdit, onDelete, onImageClick }) {
+            const isToday = formatDateTime(record.createdAt || record.date).includes("今日");
+            return (
+                <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 relative animate-in slide-in-from-bottom-2 font-black text-left">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="bg-rose-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black uppercase">Trouble</span>
+                            <span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>
+                            {isToday && <span className="bg-emerald-50 text-emerald-600 text-[8px] px-2 py-0.5 rounded-full font-black">NEW</span>}
+                        </div>
+                    </div>
+                    <div className="mb-4">
+                        <label className="text-[9px] text-rose-400 block mb-1">トラブル内容</label>
+                        <p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{record.title}</p>
+                    </div>
+                    <div className="mb-4 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <label className="text-[9px] text-indigo-400 block mb-1">対処法</label>
+                        <p className="text-slate-600 text-xs font-bold leading-relaxed whitespace-pre-wrap">{record.solution}</p>
+                    </div>
+                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">{record.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(img)} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
+                    <div className="flex justify-between items-end text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
+                        <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
+                        <div className="flex gap-2">
+                            <button onClick={() => onEdit(record)} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-indigo-600 active:scale-90 transition-all"><Icon name="Edit3" size={14} /></button>
+                            <button onClick={() => onDelete(record.id)} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-rose-600 active:scale-90 transition-all"><Icon name="Trash2" size={14} /></button>
+                        </div>
                     </div>
                 </div>
             );
@@ -324,11 +369,27 @@
 
         // --- Sections ---
 
+        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onAddUpdate, onDelete, onImageClick }) {
+            const sorted = useMemo(() => {
+                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
+                const list = [...base].sort((a, b) => {
+                    const getTime = (r) => {
+                        const baseTime = r.createdAt?.seconds || new Date(r.date).getTime() / 1000 || 0;
+                        const updateTimes = r.updates?.map(u => u.updatedAt?.seconds || new Date(u.updatedAt).getTime() / 1000) || [];
+                        return Math.max(baseTime, ...updateTimes);
+                    };
+                    return getTime(b) - getTime(a);
+                });
+                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+            }, [records, selectedFacility, maintenanceSearch]);
+            const displayList = showArchive ? sorted : sorted.slice(0, 10);
+            return (<div className="space-y-4">{displayList.map(r => (<MaintenanceCard key={r.id} record={r} onDelete={onDelete} onEdit={onEdit} onAddUpdate={onAddUpdate} onImageClick={onImageClick} selectionMode={selectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => onToggleSelection(r.id)} />))} {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">メンテナンス報告はありません</div>}</div>);
+        }
+
         function InventorySection({ items, onOpenAdd, onUpdateStock, onEdit, onDelete }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterLoc, setFilterLoc] = useState('All');
             const lowStockItems = useMemo(() => items.filter(item => Number(item.stock) <= Number(item.threshold || 5)), [items]);
-            
             const grouped = useMemo(() => {
                 const filtered = items.filter(i => (i.name || "").toLowerCase().includes(searchTerm.toLowerCase()) && (filterLoc === 'All' || i.location === filterLoc));
                 const groups = {}; 
@@ -342,12 +403,7 @@
 
             return (
                 <div className="space-y-4 animate-in fade-in font-black pb-10 text-left">
-                    {lowStockItems.length > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm">
-                            <div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div>
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div>
-                        </div>
-                    )}
+                    {lowStockItems.length > 0 && (<div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm"><div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div><div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div></div>)}
                     <div className="relative"><Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="品目検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['All', ...INVENTORY_LOCATIONS].map(l => (<button key={l} onClick={() => setFilterLoc(l)} className={`px-4 py-1.5 rounded-full border text-[11px] whitespace-nowrap transition-all font-black ${filterLoc === l ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}>{l === 'All' ? '全拠点' : l}</button>))}</div>
                     <div className="space-y-4">
@@ -373,19 +429,11 @@
                                                     </div>
                                                     {item.prevChecked && (<div className="text-[8px] text-slate-400 font-black leading-tight">前回: {formatDateTime(item.prevChecked)} {diffStr && <span className={`ml-1 ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>({diffStr})</span>}</div>)}
                                                     <div className="flex gap-2 mt-2">
-                                                        <button onClick={() => onEdit(item)} className="text-[9px] text-indigo-400 font-black flex items-center gap-0.5">
-                                                            <Icon name="Edit3" size={10} /> 編集
-                                                        </button>
-                                                        <button onClick={() => onDelete(item.id)} className="text-[9px] text-rose-400 font-black flex items-center gap-0.5">
-                                                            <Icon name="Trash2" size={10} /> 削除
-                                                        </button>
+                                                        <button onClick={() => onEdit(item)} className="text-[9px] text-indigo-400 font-black flex items-center gap-0.5"><Icon name="Edit3" size={10} /> 編集</button>
+                                                        <button onClick={() => onDelete(item.id)} className="text-[9px] text-rose-400 font-black flex items-center gap-0.5"><Icon name="Trash2" size={10} /> 削除</button>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black">
-                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button>
-                                                    <span className="text-xs font-black w-6 text-center">{item.stock}</span>
-                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button>
-                                                </div>
+                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black"><button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button><span className="text-xs font-black w-6 text-center">{item.stock}</span><button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button></div>
                                             </div>
                                         );
                                     })}
@@ -396,20 +444,6 @@
                     <button onClick={onOpenAdd} className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 transition-transform font-black"><Icon name="Plus" size={28} /></button>
                 </div>
             );
-        }
-
-        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onDelete, onImageClick }) {
-            const sorted = useMemo(() => {
-                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
-                const list = [...base].sort((a, b) => {
-                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
-                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
-                    return timeB - timeA;
-                });
-                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
-            }, [records, selectedFacility, maintenanceSearch]);
-            const displayList = showArchive ? sorted : sorted.slice(0, 10);
-            return (<div className="space-y-4">{displayList.map(r => (<MaintenanceCard key={r.id} record={r} onDelete={onDelete} onEdit={onEdit} onImageClick={onImageClick} selectionMode={selectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => onToggleSelection(r.id)} />))} {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">メンテナンス報告はありません</div>}</div>);
         }
 
         function ShiftSection({ shifts, onOpenAdd, onDelete, onEdit }) {
@@ -477,25 +511,25 @@
             );
         }
 
-        function ManualSectionWrapperContainer({ manuals, selectedFacility, onOpenAdd, onCopy, onDelete, onImageClick, appId }) {
+        function ManualSectionWrapperContainer({ manuals, selectedFacility, onOpenAdd, onCopy, onDelete, onEdit, onImageClick, appId }) {
             const [activeType, setActiveType] = useState('manual'); 
             const [facilityFilter, setFacilityFilter] = useState('すべて');
             const [tagFilter, setTagFilter] = useState('すべて');
             const [searchTerm, setSearchTerm] = useState('');
-            const filtered = useMemo(() => manuals.filter(m => { const matchType = m.type === activeType; const matchFacility = facilityFilter === 'すべて' || m.facility === facilityFilter; const matchTag = tagFilter === 'すべて' || m.tag === tagFilter; const matchGlobalFacility = selectedFacility === 'all' || m.facility === '共通' || m.facility === selectedFacility; const matchSearch = searchTerm === '' || (m.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (m.content || "").toLowerCase().includes(searchTerm.toLowerCase()); return matchType && matchFacility && matchTag && matchGlobalFacility && matchSearch; }), [manuals, activeType, facilityFilter, tagFilter, selectedFacility, searchTerm]);
+            const filtered = useMemo(() => manuals.filter(m => { const matchType = m.type === activeType; const matchFacility = facilityFilter === 'すべて' || m.facility === facilityFilter; const matchTag = (activeType === 'trouble') ? true : (tagFilter === 'すべて' || m.tag === tagFilter); const matchGlobalFacility = selectedFacility === 'all' || m.facility === '共通' || m.facility === selectedFacility; const matchSearch = searchTerm === '' || (m.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (m.content || "").toLowerCase().includes(searchTerm.toLowerCase()) || (m.solution || "").toLowerCase().includes(searchTerm.toLowerCase()); return matchType && matchFacility && matchTag && matchGlobalFacility && matchSearch; }), [manuals, activeType, facilityFilter, tagFilter, selectedFacility, searchTerm]);
             return (
                 <div className="space-y-5 animate-in fade-in duration-300 text-left font-black pb-10">
-                    <div className="flex bg-white p-1 rounded-2xl border shadow-sm mx-1"><button onClick={() => setActiveType('manual')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="BookOpen" size={14} /> マニュアル</button><button onClick={() => setActiveType('faq')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'faq' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="MessageSquare" size={14} /> よくある質問</button></div>
+                    <div className="flex justify-center px-1"><button onClick={() => onOpenAdd(activeType)} className="w-full bg-indigo-600 text-white py-4 rounded-[2rem] shadow-lg flex items-center justify-center gap-2 font-black"><Icon name="Plus" size={20} />{activeType === 'trouble' ? 'トラブル履歴を記録' : '新規情報を追加'}</button></div>
+                    <div className="flex bg-white p-1 rounded-2xl border shadow-sm mx-1"><button onClick={() => setActiveType('manual')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="BookOpen" size={14} /> マニュアル</button><button onClick={() => setActiveType('faq')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'faq' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="MessageSquare" size={14} /> 質問集</button><button onClick={() => setActiveType('trouble')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'trouble' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="AlertCircle" size={14} /> トラブル履歴</button></div>
                     <div className="px-1 relative"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="space-y-2 px-1"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_FACILITIES].map(f => <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>)}</div></div>
-                    <div className="space-y-2 px-1"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}</div></div>
-                    <div className="grid gap-4 px-1">{filtered.map(m => <ManualCard key={m.id} manual={m} onCopy={onCopy} onDelete={onDelete} onImageClick={onImageClick} appId={appId} />)}</div>
-                    <div className="flex justify-center pt-4"><button onClick={onOpenAdd} className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] shadow-xl flex items-center gap-2 font-black"><Icon name="Plus" size={20} /> 新規情報を追加</button></div>
+                    {activeType !== 'trouble' && (<div className="space-y-2 px-1"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap font-black shadow-sm ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}</div></div>)}
+                    <div className="grid gap-4 px-1">{filtered.map(m => (activeType === 'trouble' ? <TroubleCard key={m.id} record={m} onEdit={onEdit} onDelete={onDelete} onImageClick={onImageClick} /> : <ManualCard key={m.id} manual={m} onCopy={onCopy} onDelete={onDelete} onImageClick={onImageClick} appId={appId} />))}</div>
                 </div>
             );
         }
 
-        // --- MAIN APP COMPONENT ---
+        // --- Main App Component ---
 
         function App() {
             const [user, setUser] = useState(null);
@@ -509,12 +543,17 @@
             const [isSelectionMode, setIsSelectionMode] = useState(false);
             const [selectedMaintIds, setSelectedMaintIds] = useState(new Set());
             const [toastMessage, setToastMessage] = useState(null);
+            
+            // Modal States
             const [showAddMaintenance, setShowAddMaintenance] = useState(false);
             const [editingMaintenanceRecord, setEditingMaintenanceRecord] = useState(null);
+            const [showAddUpdate, setShowAddUpdate] = useState(null);
             const [maintenanceSearch, setMaintenanceSearch] = useState('');
             const [showAddInventory, setShowAddInventory] = useState(false);
             const [editingInventoryItem, setEditingInventoryItem] = useState(null);
             const [showAddManual, setShowAddManual] = useState(false);
+            const [editingManual, setEditingManual] = useState(null);
+            const [manualTypeForAdd, setManualTypeForAdd] = useState('manual');
             const [showAddBooking, setShowAddBooking] = useState(false);
             const [editingBooking, setEditingBooking] = useState(null);
             const [showShiftBulk, setShowShiftBulk] = useState(false);
@@ -523,6 +562,7 @@
             const [selectedImage, setSelectedImage] = useState(null);
             const [showArchive, setShowArchive] = useState(false);
             const [dataLoaded, setDataLoaded] = useState(false);
+
             const { methods, auth, db, appId, initialToken } = window.FirebaseSDK;
 
             useEffect(() => {
@@ -549,7 +589,11 @@
                 return () => { unsubM(); unsubI(); unsubMa(); unsubB(); unsubS(); };
             }, [user]);
 
-            const handleSave = async (col, data) => { if (!user) return; await methods.addDoc(methods.collection(db, 'artifacts', appId, 'public', 'data', col), { ...data, createdAt: methods.serverTimestamp(), updatedAt: methods.serverTimestamp(), userId: user.uid }); };
+            const handleSave = async (col, data) => { 
+                if (!user) return; 
+                const createdAt = methods.serverTimestamp();
+                await methods.addDoc(methods.collection(db, 'artifacts', appId, 'public', 'data', col), { ...data, createdAt, updatedAt: createdAt, userId: user.uid }); 
+            };
             const handleUpdate = async (col, id, data) => { if (!user) return; await methods.updateDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', col, id), { ...data, updatedAt: methods.serverTimestamp() }); };
             const handleDelete = async (col, id) => { if (!user) return; await methods.deleteDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', col, id)); if(selectedDayDetail) setSelectedDayDetail(null); };
             
@@ -557,6 +601,13 @@
                 const item = inventoryItems.find(i => i.id === id);
                 if (!item) return;
                 await handleUpdate('inventory', id, { prevStock: item.stock, prevChecked: item.lastChecked || item.createdAt?.toDate().toISOString() || new Date().toISOString(), stock: Math.max(0, v), lastChecked: new Date().toISOString() });
+            };
+
+            const handleAddMaintUpdate = async (data) => {
+                if (!showAddUpdate || !user) return;
+                const record = showAddUpdate;
+                const newUpdate = { comment: data.comment, images: data.images || [], updatedAt: new Date().toISOString(), userId: user.uid };
+                await handleUpdate('maintenance_records', record.id, { updates: methods.arrayUnion(newUpdate) });
             };
 
             const handleSaveShiftBulk = async (date, newShifts) => {
@@ -572,8 +623,9 @@
                 let text = "【メンテ報告まとめ】\n━━━━━━━━━━━━\n";
                 selectedItems.forEach((item, idx) => {
                     text += `■ ${item.date || '日付不明'} (${item.facility})\n`;
-                    if (item.images && item.images.length > 0) text += "【写真付】\n";
+                    if ((item.images && item.images.length > 0) || item.updates?.some(u => u.images?.length > 0)) text += "【写真付】\n";
                     text += `${item.task}\n`;
+                    if (item.updates && item.updates.length > 0) { text += "＜追記履歴＞\n"; item.updates.forEach(up => text += `・${up.comment}\n`); }
                     if (idx < selectedItems.length - 1) text += "--------------------\n";
                 });
                 text += "━━━━━━━━━━━━\n詳細はこちら→ https://ion0002.pages.dev/";
@@ -586,7 +638,7 @@
                 <div className="min-h-screen pb-24 overflow-x-hidden bg-slate-50 font-black text-left">
                     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm"><h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1><select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black outline-none"><option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select></header>
                     <main className="p-4 max-w-md mx-auto space-y-6">
-                        {(!user || !dataLoaded) ? (<div className="flex flex-col items-center justify-center py-40 text-slate-400 gap-4"><Icon name="RefreshCw" className="animate-spin" size={32} /><p>最新データを同期中...</p></div>) : (
+                        {(!user || !dataLoaded) ? (<div className="flex flex-col items-center justify-center py-40 text-slate-400 gap-4"><Icon name="RefreshCw" className="animate-spin" size={32} /><p>接続中...</p></div>) : (
                             <>
                                 {activeTab === 'schedule' && <ScheduleSectionContainer selectedFacility={selectedFacility} bookings={bookings} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
                                 {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
@@ -599,13 +651,13 @@
                                                 {!isSelectionMode && <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>}
                                             </div>
                                         </div>
-                                        <div className="relative px-1"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="メンテ内容で検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
-                                        <MaintenanceCardList records={records} selectedFacility={selectedFacility} maintenanceSearch={maintenanceSearch} showArchive={showArchive} selectionMode={isSelectionMode} selectedMaintIds={selectedMaintIds} onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} onEdit={setEditingMaintenanceRecord} onDelete={id => handleDelete('maintenance_records', id)} onImageClick={setSelectedImage} />
+                                        <div className="relative px-1"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="内容を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
+                                        <MaintenanceCardList records={records} selectedFacility={selectedFacility} maintenanceSearch={maintenanceSearch} showArchive={showArchive} selectionMode={isSelectionMode} selectedMaintIds={selectedMaintIds} onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} onEdit={setEditingMaintenanceRecord} onAddUpdate={setShowAddUpdate} onDelete={id => handleDelete('maintenance_records', id)} onImageClick={setSelectedImage} />
                                         {!isSelectionMode && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm">{showArchive ? "最新の10件を表示" : "すべての履歴を見る"}</button>}
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={handleUpdateStock} />}
-                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("コピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
+                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={(type) => { setManualTypeForAdd(type); setShowAddManual(true); }} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("本文をコピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onEdit={setEditingManual} onImageClick={setSelectedImage} appId={appId} />}
                             </>
                         )}
                     </main>
@@ -616,11 +668,12 @@
                     {showAddBooking && <AddModal title="予約登録" onClose={() => setShowAddBooking(false)} onSave={d => handleSave('bookings', d)} fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'guestName', label: 'ゲスト名', type: 'text' }, { name: 'people', label: '人数', type: 'number', default: 1 }, { name: 'startDate', label: 'IN日', type: 'date' }, { name: 'endDate', label: 'OUT日', type: 'date' }, { name: 'babyCrib', label: 'ベビーベッド', type: 'checkbox' }, { name: 'babyBath', label: 'ベビーバス', type: 'checkbox' }, { name: 'babyChair', label: 'ベビーチェア', type: 'checkbox' }, { name: 'luggage', label: '荷物預かり', type: 'checkbox' }, { name: 'notes', label: '備考', type: 'textarea', required: false }]} />}
                     {showShiftBulk && <ShiftBulkModal date={selectedShiftDate || new Date().toLocaleDateString('sv-SE')} existingShifts={shifts.filter(s => s.date === (selectedShiftDate || new Date().toLocaleDateString('sv-SE')))} onClose={() => setShowShiftBulk(false)} onSave={handleSaveShiftBulk} />}
                     {showAddMaintenance && <AddModal title="メンテナンス報告" onClose={() => setShowAddMaintenance(false)} onSave={d => handleSave('maintenance_records', d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date', default: new Date().toLocaleDateString('sv-SE') }]} />}
-                    {editingMaintenanceRecord && <AddModal title="メンテナンス編集" initialData={editingMaintenanceRecord} onClose={() => setEditingMaintenanceRecord(null)} onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date' }]} />}
+                    {editingMaintenanceRecord && <AddModal title="メイン投稿の編集" initialData={editingMaintenanceRecord} onClose={() => setEditingMaintenanceRecord(null)} onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date' }]} />}
+                    {showAddUpdate && <AddModal title="追加の情報を追記" onClose={() => setShowAddUpdate(null)} onSave={handleAddMaintUpdate} hasImage fields={[{ name: 'comment', label: '追記コメント', type: 'textarea' }]} />}
                     {showAddInventory && <AddModal title="備品登録" onClose={() => setShowAddInventory(false)} onSave={d => handleSave('inventory', { ...d, lastChecked: new Date().toISOString() })} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number', default: 0 }, { name: 'threshold', label: '補充アラート', type: 'number', default: 5 }]} />}
                     {editingInventoryItem && <AddModal title="備品編集" initialData={editingInventoryItem} onClose={() => setEditingInventoryItem(null)} onSave={d => handleUpdate('inventory', editingInventoryItem.id, d)} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number' }, { name: 'threshold', label: '補充アラート', type: 'number' }]} />}
-                    {showAddManual && <AddModal title="マニュアル投稿" onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', d)} hasImage fields={[{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
-                    
+                    {showAddManual && <AddModal title={manualTypeForAdd === 'trouble' ? "トラブル履歴を記録" : "マニュアル・FAQ投稿"} onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', { ...d, type: manualTypeForAdd })} hasImage fields={manualTypeForAdd === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local', default: new Date().toISOString().slice(0,16) }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
+                    {editingManual && <AddModal title="内容を修正" initialData={editingManual} onClose={() => setEditingManual(null)} onSave={d => handleUpdate('manuals', editingManual.id, d)} hasImage fields={editingManual.type === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local' }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
                     {selectedDayDetail && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black text-slate-800">
                             <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black">{selectedDayDetail.day.replace(/-/g, '/')} の詳細</h3><button onClick={() => setSelectedDayDetail(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
