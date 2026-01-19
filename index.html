@@ -24,7 +24,7 @@
         .badge-options { font-size: 5px; opacity: 0.9; margin-left: 2px; letter-spacing: -0.5px; }
         
         /* シフトバッジ */
-        .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e880; }
+        .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
         
         .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
@@ -100,8 +100,9 @@
             const date = new Date(isoString);
             const now = new Date();
             const isToday = date.toDateString() === now.toDateString();
-            const timeStr = `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-            return isToday ? `今日 ${timeStr}` : `${date.getMonth() + 1}/${date.getDate()} ${timeStr}`;
+            const datePart = isToday ? "今日" : `${date.getMonth() + 1}/${date.getDate()}`;
+            const timePart = `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+            return `${datePart} ${timePart}`;
         }
 
         function compressImage(file) {
@@ -127,7 +128,7 @@
             });
         }
 
-        // --- UI Components ---
+        // --- UI Base Components ---
         function NavItem({ active, iconName, label, onClick }) {
             return (
                 <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all active:scale-90 flex-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -164,9 +165,16 @@
             );
         }
 
+        // --- Card Components ---
         function MaintenanceCard({ record, onDelete, onEdit, onImageClick, selectionMode, isSelected, onToggleSelection }) {
+            const postDate = new Date(record.date || record.createdAt?.seconds * 1000 || Date.now());
+            const isToday = postDate.toDateString() === new Date().toDateString();
+
             return (
-                <div onClick={selectionMode ? onToggleSelection : undefined} className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}>
+                <div 
+                    onClick={selectionMode ? onToggleSelection : undefined} 
+                    className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}
+                >
                     {selectionMode && (
                         <div className="absolute top-4 right-4 z-10">
                             <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
@@ -174,15 +182,16 @@
                             </div>
                         </div>
                     )}
-                    <div className="flex justify-between items-start mb-3">
+                    <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span>
                             <span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>
+                            {isToday && <span className="bg-amber-100 text-amber-600 text-[8px] px-1.5 py-0.5 rounded font-black tracking-tighter">NEW</span>}
                         </div>
                         {!selectionMode && (
                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500"><Icon name="Edit3" size={14} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500"><Icon name="Trash2" size={14} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500 p-1"><Icon name="Edit3" size={14} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500 p-1"><Icon name="Trash2" size={14} /></button>
                             </div>
                         )}
                     </div>
@@ -194,7 +203,7 @@
                     )}
                     <div className="flex justify-between items-center text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
                         <span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span>
-                        <span>{record.date || "日付なし"}</span>
+                        <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
                     </div>
                 </div>
             );
@@ -379,9 +388,7 @@
             const [viewDate, setViewDate] = useState(new Date());
             const year = viewDate.getFullYear(); const month = viewDate.getMonth();
             const firstDayIndex = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
             const todayList = useMemo(() => bookings.filter(b => b.startDate === todayStr || b.endDate === todayStr || (todayStr > b.startDate && todayStr < b.endDate)).filter(b => selectedFacility === 'all' || b.facility === selectedFacility), [bookings, todayStr, selectedFacility]);
-            
             return (
                 <div className="space-y-6 animate-in fade-in duration-500 font-black text-left">
                     <section className="space-y-3">
@@ -421,11 +428,7 @@
                                                     <div key={db.id} className="booking-badge flex items-center justify-between" style={{backgroundColor: FACILITY_COLORS[db.facility]}}>
                                                         <span className="truncate">{db.facility}{statusLabel}</span>
                                                         <span className="badge-options">
-                                                            {db.babyCrib && "ベ"}
-                                                            {db.babyBath && "バ"}
-                                                            {db.babyChair && "チ"}
-                                                            {db.luggage && "荷"}
-                                                            {db.notes && "＊"}
+                                                            {db.babyCrib && "ベ"}{db.babyBath && "バ"}{db.babyChair && "チ"}{db.luggage && "荷"}{db.notes && "＊"}
                                                         </span>
                                                     </div>
                                                 );
@@ -462,22 +465,18 @@
                     </div>
                     <div className="px-1 relative">
                         <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     </div>
                     <div className="space-y-2 px-1">
                         <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                            {['すべて', ...MANUAL_FACILITIES].map(f => (
-                                <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>
-                            ))}
+                            {['すべて', ...MANUAL_FACILITIES].map(f => <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>)}
                         </div>
                     </div>
                     <div className="space-y-2 px-1">
                         <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                            {['すべて', ...MANUAL_TAGS].map(t => (
-                                <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
-                            ))}
+                            {['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}
                         </div>
                     </div>
                     <div className="grid gap-4 px-1">{filtered.map(m => <ManualCard key={m.id} manual={m} onCopy={onCopy} onDelete={onDelete} onImageClick={onImageClick} appId={appId} />)}</div>
@@ -594,23 +593,33 @@
             const handleGenerateLineReport = () => {
                 const selectedItems = records.filter(r => selectedMaintIds.has(r.id));
                 if (selectedItems.length === 0) return;
-                let text = "【メンテ報告】\n";
-                selectedItems.forEach(item => text += `・${item.date || '日付不明'} [${item.facility}]\n  ${item.task}\n`);
-                text += "\n詳細はこちら→https://ion0002.pages.dev/";
+                let text = "【メンテ報告まとめ】\n━━━━━━━━━━━━\n";
+                selectedItems.forEach((item, idx) => {
+                    text += `■ ${item.date || '日付不明'} (${item.facility})\n`;
+                    if (item.images && item.images.length > 0) text += "【写真付】\n";
+                    text += `${item.task}\n`;
+                    if (idx < selectedItems.length - 1) text += "--------------------\n";
+                });
+                text += "━━━━━━━━━━━━\n詳細はこちら→ https://ion0002.pages.dev/";
                 const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
                 setToastMessage("コピーしました！"); setTimeout(() => setToastMessage(null), 3000);
                 setIsSelectionMode(false); setSelectedMaintIds(new Set());
             };
 
-            const filteredM = useMemo(() => {
+            const sortedMaintenance = useMemo(() => {
                 const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
-                return maintenanceSearch ? base.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : base;
+                const sorted = [...base].sort((a, b) => {
+                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
+                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
+                    return timeB - timeA;
+                });
+                return maintenanceSearch ? sorted.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : sorted;
             }, [records, selectedFacility, maintenanceSearch]);
 
             return (
                 <div className="min-h-screen pb-24 overflow-x-hidden bg-slate-50 font-black text-left">
                     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
-                        <h1 className="text-xl font-black text-indigo-700 flex items-center gap-2"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1>
+                        <h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1>
                         <select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black outline-none"><option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select>
                     </header>
                     <main className="p-4 max-w-md mx-auto space-y-6">
@@ -623,25 +632,25 @@
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6">
                                         <div className="flex justify-between items-center px-1">
-                                            <h2 className="text-sm text-slate-400 italic">{isSelectionMode ? "選択中..." : (showArchive ? "アーカイブ" : "最近の報告")}</h2>
+                                            <h2 className="text-sm text-slate-400 italic">{isSelectionMode ? "報告項目を選択..." : (showArchive ? "アーカイブ" : "最近の報告")}</h2>
                                             <div className="flex gap-2">
-                                                <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedMaintIds(new Set()); }} className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm`}><Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />{isSelectionMode ? "取消" : "LINE報告"}</button>
+                                                <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedMaintIds(new Set()); }} className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm transition-all`}><Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />{isSelectionMode ? "取消" : "LINE報告"}</button>
                                                 {!isSelectionMode && <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>}
                                             </div>
                                         </div>
-                                        <div className="relative px-1"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="メンテ検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
-                                        <div className="space-y-4">{(showArchive ? filteredM : filteredM.slice(0, 10)).map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} selectionMode={isSelectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => { const n = new Set(selectedMaintIds); if(n.has(r.id)) n.delete(r.id); else n.add(r.id); setSelectedMaintIds(n); }} />)}</div>
-                                        {!isSelectionMode && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm">{showArchive ? "最新に戻る" : "すべて見る"}</button>}
+                                        <div className="relative px-1"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="メンテ内容で検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
+                                        <div className="space-y-4">{(showArchive ? sortedMaintenance : sortedMaintenance.slice(0, 10)).map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} selectionMode={isSelectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => { const n = new Set(selectedMaintIds); if(n.has(r.id)) n.delete(r.id); else n.add(r.id); setSelectedMaintIds(n); }} />)}</div>
+                                        {!isSelectionMode && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm">{showArchive ? "最新の10件を表示" : "すべての履歴を見る"}</button>}
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={(id, v) => handleUpdate('inventory', id, { stock: Math.max(0, v), lastChecked: new Date().toISOString() })} />}
-                                {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("コピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
+                                {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("本文をコピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                             </>
                         )}
                     </main>
-                    {toastMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black animate-in fade-in">{toastMessage}</div>}
+                    {toastMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black animate-in fade-in tracking-tight">{toastMessage}</div>}
                     {isSelectionMode && selectedMaintIds.size > 0 && <div className="fixed bottom-24 left-4 right-4 z-50 animate-in slide-in-from-bottom-10"><button onClick={handleGenerateLineReport} className="w-full bg-emerald-500 text-white py-4 rounded-[2rem] shadow-xl flex items-center justify-center gap-3 font-black"><Icon name="MessageCircle" size={20} strokeWidth={3} />選んだ項目を報告 ({selectedMaintIds.size}件)</button></div>}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-lg">
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-lg font-black">
                         <NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} />
                         <NavItem active={activeTab === 'shift'} iconName="Calendar" label="シフト" onClick={() => setActiveTab('shift')} />
                         <NavItem active={activeTab === 'maintenance'} iconName="Wrench" label="メンテ" onClick={() => setActiveTab('maintenance')} />
@@ -651,7 +660,9 @@
                     {showAddBooking && <AddModal title="予約登録" onClose={() => setShowAddBooking(false)} onSave={d => handleSave('bookings', d)} fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'guestName', label: 'ゲスト名', type: 'text' }, { name: 'people', label: '人数', type: 'number', default: 1 }, { name: 'startDate', label: 'IN日', type: 'date' }, { name: 'endDate', label: 'OUT日', type: 'date' }, { name: 'babyCrib', label: 'ベビーベッド', type: 'checkbox' }, { name: 'babyBath', label: 'ベビーバス', type: 'checkbox' }, { name: 'babyChair', label: 'ベビーチェア', type: 'checkbox' }, { name: 'luggage', label: '荷物預かり', type: 'checkbox' }, { name: 'notes', label: '備考', type: 'textarea', required: false }]} />}
                     {showShiftBulk && <ShiftBulkModal date={selectedShiftDate || new Date().toLocaleDateString('sv-SE')} existingShifts={shifts.filter(s => s.date === (selectedShiftDate || new Date().toLocaleDateString('sv-SE')))} onClose={() => setShowShiftBulk(false)} onSave={handleSaveShiftBulk} />}
                     {showAddMaintenance && <AddModal title="メンテナンス報告" onClose={() => setShowAddMaintenance(false)} onSave={d => handleSave('maintenance_records', d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date', default: new Date().toLocaleDateString('sv-SE') }]} />}
+                    {editingMaintenanceRecord && <AddModal title="メンテナンス編集" initialData={editingMaintenanceRecord} onClose={() => setEditingMaintenanceRecord(null)} onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date' }]} />}
                     {showAddInventory && <AddModal title="備品登録" onClose={() => setShowAddInventory(false)} onSave={d => handleSave('inventory', { ...d, lastChecked: new Date().toISOString() })} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number', default: 0 }, { name: 'threshold', label: '補充アラート', type: 'number', default: 5 }]} />}
+                    {editingInventoryItem && <AddModal title="備品編集" initialData={editingInventoryItem} onClose={() => setEditingInventoryItem(null)} onSave={d => handleUpdate('inventory', editingInventoryItem.id, d)} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number' }, { name: 'threshold', label: '補充アラート', type: 'number' }]} />}
                     {showAddManual && <AddModal title="マニュアル投稿" onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', d)} hasImage fields={[{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
                     {selectedDayDetail && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black text-slate-800">
@@ -682,7 +693,7 @@
                             </div>
                         </div>
                     )}
-                    {selectedImage && <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}><button className="absolute top-6 right-6 text-white"><Icon name="X" size={32} /></button><img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl" /></div>}
+                    {selectedImage && <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}><button className="absolute top-6 right-6 text-white"><Icon name="X" size={32} /></button><img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl font-black" /></div>}
                 </div>
             );
         }
