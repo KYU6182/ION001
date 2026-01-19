@@ -19,11 +19,9 @@
         .day-cell:active { background-color: #f8fafc; transform: scale(0.98); }
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 2px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
         
-        /* 宿泊バッジ：オプション記号を含む */
         .booking-badge { font-size: 6px; font-weight: 900; color: white; padding: 1px 2px; border-radius: 2px; width: 98%; text-align: center; margin-bottom: 1px; line-height: 1.1; }
         .badge-options { font-size: 5px; opacity: 0.9; margin-left: 2px; letter-spacing: -0.5px; }
         
-        /* シフトバッジ */
         .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
         
         .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -128,7 +126,7 @@
             });
         }
 
-        // --- Sub-Components (Defined before usage in higher components) ---
+        // --- Low-level UI Components ---
 
         function NavItem({ active, iconName, label, onClick }) {
             return (
@@ -175,7 +173,14 @@
             const [images, setImages] = useState(initialData?.images || []); 
             const [isSaving, setIsSaving] = useState(false); 
             const fileRef = useRef();
-            const save = async (e) => { e.preventDefault(); setIsSaving(true); await onSave({ ...formData, images }); setIsSaving(false); onClose(); };
+            
+            const save = async (e) => { 
+                e.preventDefault(); 
+                setIsSaving(true); 
+                await onSave({ ...formData, images }); 
+                setIsSaving(false); 
+                onClose(); 
+            };
 
             return (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1500] flex items-end sm:items-center justify-center p-4 font-black text-left">
@@ -215,21 +220,55 @@
             );
         }
 
-        // --- Higher Components ---
+        // --- Card Components ---
 
         function MaintenanceCard({ record, onDelete, onEdit, onImageClick, selectionMode, isSelected, onToggleSelection }) {
             const postDate = new Date(record.date || record.createdAt?.seconds * 1000 || Date.now());
             const isToday = postDate.toDateString() === new Date().toDateString();
+
             return (
-                <div onClick={selectionMode ? onToggleSelection : undefined} className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}>
-                    {selectionMode && (<div className="absolute top-4 right-4 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>{isSelected && <Icon name="Check" size={14} strokeWidth={4} />}</div></div>)}
+                <div 
+                    onClick={selectionMode ? onToggleSelection : undefined} 
+                    className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}
+                >
+                    {selectionMode && (
+                        <div className="absolute top-4 right-4 z-10">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
+                                {isSelected && <Icon name="Check" size={12} strokeWidth={4} />}
+                            </div>
+                        </div>
+                    )}
                     <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span><span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>{isToday && <span className="bg-amber-100 text-amber-600 text-[8px] px-1.5 py-0.5 rounded font-black tracking-tighter">NEW</span>}</div>
-                        {!selectionMode && (<div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500 p-1"><Icon name="Edit3" size={14} /></button><button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500 p-1"><Icon name="Trash2" size={14} /></button></div>)}
+                        <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span>
+                            <span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>
+                            {isToday && <span className="bg-emerald-50 text-emerald-600 text-[8px] px-2 py-0.5 rounded-full font-black">NEW</span>}
+                        </div>
                     </div>
                     <p className="text-slate-700 text-sm font-bold mb-4 whitespace-pre-wrap leading-relaxed">{record.task}</p>
-                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">{record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
-                    <div className="flex justify-between items-center text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50"><span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span><span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span></div>
+                    {record.images && record.images.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
+                            {record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}
+                        </div>
+                    )}
+                    <div className="flex justify-between items-end text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
+                        <div className="flex flex-col">
+                            <span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span>
+                            <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
+                        </div>
+                        {!selectionMode && (
+                            <div className="flex gap-2">
+                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-indigo-600 active:scale-90 transition-all flex items-center gap-1">
+                                    <Icon name="Edit3" size={14} />
+                                    <span>編集</span>
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-rose-600 active:scale-90 transition-all flex items-center gap-1">
+                                    <Icon name="Trash2" size={14} />
+                                    <span>削除</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
@@ -283,26 +322,13 @@
             );
         }
 
-        // --- TAB SECTIONS ---
-
-        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onDelete, onImageClick }) {
-            const sorted = useMemo(() => {
-                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
-                const list = [...base].sort((a, b) => {
-                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
-                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
-                    return timeB - timeA;
-                });
-                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
-            }, [records, selectedFacility, maintenanceSearch]);
-            const displayList = showArchive ? sorted : sorted.slice(0, 10);
-            return (<div className="space-y-4">{displayList.map(r => (<MaintenanceCard key={r.id} record={r} onDelete={onDelete} onEdit={onEdit} onImageClick={onImageClick} selectionMode={selectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => onToggleSelection(r.id)} />))} {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">メンテナンス報告はありません</div>}</div>);
-        }
+        // --- Sections ---
 
         function InventorySection({ items, onOpenAdd, onUpdateStock, onEdit, onDelete }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterLoc, setFilterLoc] = useState('All');
             const lowStockItems = useMemo(() => items.filter(item => Number(item.stock) <= Number(item.threshold || 5)), [items]);
+            
             const grouped = useMemo(() => {
                 const filtered = items.filter(i => (i.name || "").toLowerCase().includes(searchTerm.toLowerCase()) && (filterLoc === 'All' || i.location === filterLoc));
                 const groups = {}; 
@@ -316,7 +342,12 @@
 
             return (
                 <div className="space-y-4 animate-in fade-in font-black pb-10 text-left">
-                    {lowStockItems.length > 0 && (<div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm"><div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div><div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div></div>)}
+                    {lowStockItems.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm">
+                            <div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div>
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div>
+                        </div>
+                    )}
                     <div className="relative"><Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="品目検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['All', ...INVENTORY_LOCATIONS].map(l => (<button key={l} onClick={() => setFilterLoc(l)} className={`px-4 py-1.5 rounded-full border text-[11px] whitespace-nowrap transition-all font-black ${filterLoc === l ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}>{l === 'All' ? '全拠点' : l}</button>))}</div>
                     <div className="space-y-4">
@@ -324,7 +355,10 @@
                             <div key={g.name} className={`bg-white rounded-[2rem] border overflow-hidden shadow-sm font-black ${g.low ? 'border-rose-200' : 'border-slate-100'}`}>
                                 <div className={`p-4 flex items-center gap-3 font-black ${g.low ? 'bg-rose-50/30' : 'bg-slate-50/10'}`}>
                                     <div className="w-12 h-12 bg-white rounded-xl border flex items-center justify-center font-black shrink-0">{g.items[0]?.images?.[0] ? <img src={g.items[0].images[0]} className="w-full h-full object-cover rounded-xl" /> : <Icon name="Package" size={20} color={g.low ? "#F43F5E" : "#CBD5E1"} />}</div>
-                                    <div className="flex-1 min-w-0 font-black"><h3 className="text-sm font-black truncate">{g.name}</h3><div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div></div>
+                                    <div className="flex-1 min-w-0 font-black">
+                                        <h3 className="text-sm font-black truncate">{g.name}</h3>
+                                        <div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div>
+                                    </div>
                                     <div className={`text-xl font-black ${g.low ? 'text-rose-600' : 'text-indigo-600'}`}>{g.total}</div>
                                 </div>
                                 <div className="divide-y divide-slate-50">
@@ -334,10 +368,24 @@
                                         return (
                                             <div key={item.id} className="p-4 flex justify-between items-center group">
                                                 <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2"><span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span></div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span>
+                                                    </div>
                                                     {item.prevChecked && (<div className="text-[8px] text-slate-400 font-black leading-tight">前回: {formatDateTime(item.prevChecked)} {diffStr && <span className={`ml-1 ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>({diffStr})</span>}</div>)}
+                                                    <div className="flex gap-2 mt-2">
+                                                        <button onClick={() => onEdit(item)} className="text-[9px] text-indigo-400 font-black flex items-center gap-0.5">
+                                                            <Icon name="Edit3" size={10} /> 編集
+                                                        </button>
+                                                        <button onClick={() => onDelete(item.id)} className="text-[9px] text-rose-400 font-black flex items-center gap-0.5">
+                                                            <Icon name="Trash2" size={10} /> 削除
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black"><button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button><span className="text-xs font-black w-6 text-center">{item.stock}</span><button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button></div>
+                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black">
+                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button>
+                                                    <span className="text-xs font-black w-6 text-center">{item.stock}</span>
+                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -345,9 +393,23 @@
                             </div>
                         ))}
                     </div>
-                    <button onClick={onOpenAdd} className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 font-black"><Icon name="Plus" size={28} /></button>
+                    <button onClick={onOpenAdd} className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 transition-transform font-black"><Icon name="Plus" size={28} /></button>
                 </div>
             );
+        }
+
+        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onDelete, onImageClick }) {
+            const sorted = useMemo(() => {
+                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
+                const list = [...base].sort((a, b) => {
+                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
+                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
+                    return timeB - timeA;
+                });
+                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+            }, [records, selectedFacility, maintenanceSearch]);
+            const displayList = showArchive ? sorted : sorted.slice(0, 10);
+            return (<div className="space-y-4">{displayList.map(r => (<MaintenanceCard key={r.id} record={r} onDelete={onDelete} onEdit={onEdit} onImageClick={onImageClick} selectionMode={selectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => onToggleSelection(r.id)} />))} {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">メンテナンス報告はありません</div>}</div>);
         }
 
         function ShiftSection({ shifts, onOpenAdd, onDelete, onEdit }) {
@@ -382,7 +444,7 @@
             );
         }
 
-        function ScheduleSectionWrapper({ selectedFacility, bookings, onOpenAdd, onOpenDetail }) {
+        function ScheduleSectionContainer({ selectedFacility, bookings, onOpenAdd, onOpenDetail }) {
             const todayStr = new Date().toLocaleDateString('sv-SE');
             const [viewDate, setViewDate] = useState(new Date());
             const year = viewDate.getFullYear(); const month = viewDate.getMonth();
@@ -433,7 +495,7 @@
             );
         }
 
-        // --- Main App Component ---
+        // --- MAIN APP COMPONENT ---
 
         function App() {
             const [user, setUser] = useState(null);
@@ -526,7 +588,7 @@
                     <main className="p-4 max-w-md mx-auto space-y-6">
                         {(!user || !dataLoaded) ? (<div className="flex flex-col items-center justify-center py-40 text-slate-400 gap-4"><Icon name="RefreshCw" className="animate-spin" size={32} /><p>最新データを同期中...</p></div>) : (
                             <>
-                                {activeTab === 'schedule' && <ScheduleSectionWrapper selectedFacility={selectedFacility} bookings={bookings} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
+                                {activeTab === 'schedule' && <ScheduleSectionContainer selectedFacility={selectedFacility} bookings={bookings} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
                                 {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6">
@@ -543,7 +605,7 @@
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={handleUpdateStock} />}
-                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("本文をコピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
+                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("コピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                             </>
                         )}
                     </main>
