@@ -21,7 +21,10 @@
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
         
         /* シフトカレンダー用の小さいチップ */
-        .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1; border: 1px solid #e2e8f0; }
+        .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
+        
+        /* 選択モード時のアニメーション */
+        .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -179,123 +182,46 @@
             );
         }
 
-        function MaintenanceCard({ record, onDelete, onEdit, onImageClick }) {
+        function MaintenanceCard({ record, onDelete, onEdit, onImageClick, selectionMode, isSelected, onToggleSelection }) {
             return (
-                <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 relative group animate-in slide-in-from-bottom-2 font-black text-left">
+                <div 
+                    onClick={selectionMode ? onToggleSelection : undefined}
+                    className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20 ring-inset' : 'border-slate-100') : 'border-slate-100'} relative group animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}
+                >
+                    {selectionMode && (
+                        <div className="absolute top-4 right-4 z-10">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
+                                {isSelected && <Icon name="Check" size={14} strokeWidth={4} />}
+                            </div>
+                        </div>
+                    )}
                     <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span>
                             <span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>
                         </div>
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => onEdit(record)} className="text-slate-300 hover:text-indigo-500 transition-colors">
-                                <Icon name="Edit3" size={14} />
-                            </button>
-                            <button onClick={() => onDelete(record.id)} className="text-slate-300 hover:text-rose-500 transition-colors">
-                                <Icon name="Trash2" size={14} />
-                            </button>
-                        </div>
+                        {!selectionMode && (
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500 transition-colors">
+                                    <Icon name="Edit3" size={14} />
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500 transition-colors">
+                                    <Icon name="Trash2" size={14} />
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <p className="text-slate-700 text-sm font-bold mb-4 whitespace-pre-wrap leading-relaxed">{record.task}</p>
                     {record.images && record.images.length > 0 && (
                         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
                             {record.images.map((img, i) => (
-                                <img key={i} src={img} onClick={() => onImageClick(img)} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />
+                                <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />
                             ))}
                         </div>
                     )}
                     <div className="flex justify-between items-center text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
                         <span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span>
                         <span>{record.date || "日付なし"}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        function ManualCard({ manual, onCopy, onDelete, onImageClick, appId }) {
-            const [isEditing, setIsEditing] = useState(false);
-            const [editData, setEditData] = useState({ ...manual });
-            const [isSaving, setIsSaving] = useState(false);
-            const editFileRef = useRef(null);
-            const { db, methods } = window.FirebaseSDK;
-
-            const handleUpdate = async () => {
-                if (!editData.title || !editData.content) return;
-                setIsSaving(true);
-                try {
-                    await methods.updateDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', 'manuals', manual.id), {
-                        ...editData,
-                        updatedAt: methods.serverTimestamp()
-                    });
-                    setIsEditing(false);
-                } catch (e) { console.error("Update error:", e); } finally { setIsSaving(false); }
-            };
-
-            if (isEditing) {
-                return (
-                    <div className="bg-white rounded-[2.5rem] p-6 shadow-xl border-2 border-indigo-500 animate-in zoom-in-95 text-left font-black">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-2">
-                                <select className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs font-black" value={editData.facility} onChange={e => setEditData({...editData, facility: e.target.value})}>
-                                    {MANUAL_FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}
-                                </select>
-                                <select className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs font-black" value={editData.tag} onChange={e => setEditData({...editData, tag: e.target.value})}>
-                                    {MANUAL_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </div>
-                            <input className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-sm font-black" value={editData.title} onChange={e => setEditData({...editData, title: e.target.value})} placeholder="タイトル" />
-                            <textarea className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs h-32 font-bold" value={editData.content} onChange={e => setEditData({...editData, content: e.target.value})} placeholder="内容" />
-                            <div className="flex gap-2 overflow-x-auto py-2">
-                                {editData.images?.map((img, i) => (
-                                    <div key={i} className="relative shrink-0">
-                                        <img src={img} className="w-16 h-16 object-cover rounded-lg" />
-                                        <button onClick={() => {
-                                            const ni = [...editData.images]; ni.splice(i, 1); setEditData({...editData, images: ni});
-                                        }} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 font-black">
-                                            <Icon name="X" size={10} />
-                                        </button>
-                                    </div>
-                                ))}
-                                <button onClick={() => editFileRef.current.click()} className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 border-2 border-dashed font-black">
-                                    <Icon name="Camera" size={20} />
-                                </button>
-                                <input type="file" ref={editFileRef} className="hidden" multiple accept="image/*" onChange={async (e) => {
-                                    const comp = await Promise.all(Array.from(e.target.files).map(f => compressImage(f)));
-                                    setEditData({...editData, images: [...(editData.images || []), ...comp]});
-                                }} />
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-black">キャンセル</button>
-                                <button onClick={handleUpdate} disabled={isSaving} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs shadow-lg font-black">{isSaving ? "保存中..." : "保存"}</button>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            return (
-                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden text-left font-black text-slate-800 animate-in slide-in-from-bottom-2">
-                    <div className="p-5">
-                        <div className="flex justify-between items-start mb-3 font-black">
-                            <div className="flex flex-wrap gap-2">
-                                <span className="text-[9px] font-black px-2.5 py-1 rounded-full text-white" style={{backgroundColor: FACILITY_COLORS[manual.facility] || '#94A3B8'}}>{manual.facility}</span>
-                                <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{manual.tag || 'その他'}</span>
-                            </div>
-                            <div className="flex gap-1">
-                                <button onClick={() => setIsEditing(true)} className="text-slate-200 hover:text-indigo-500 transition-colors p-1"><Icon name="Edit3" size={14} /></button>
-                                <button onClick={() => onDelete(manual.id)} className="text-slate-200 hover:text-rose-500 transition-colors p-1"><Icon name="Trash2" size={14} /></button>
-                            </div>
-                        </div>
-                        <h3 className="text-slate-800 text-base mb-3 font-black leading-tight">{manual.title}</h3>
-                        <p className="text-slate-600 text-xs font-bold leading-relaxed whitespace-pre-wrap bg-slate-50/80 p-4 rounded-2xl mb-3">{manual.content}</p>
-                        {manual.images && manual.images.length > 0 && (
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                                {manual.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(img)} className="w-24 h-24 object-cover rounded-2xl shadow-sm border shrink-0 active:scale-95" />)}
-                            </div>
-                        )}
-                        <div className="flex justify-end pt-2">
-                            <button onClick={() => onCopy(manual.content)} className="text-indigo-400 text-[10px] flex items-center gap-1 px-3 py-1 bg-indigo-50 rounded-full active:scale-95 transition-all font-black"><Icon name="Copy" size={12} /> コピーする</button>
-                        </div>
                     </div>
                 </div>
             );
@@ -310,7 +236,11 @@
             const firstDayIndex = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-            const todayShifts = useMemo(() => shifts.filter(s => s.date === todayStr), [shifts, todayStr]);
+            const todayShiftsSorted = useMemo(() => {
+                return shifts.filter(s => s.date === todayStr).sort((a, b) => {
+                    return TIME_SLOTS.indexOf(a.timeSlot) - TIME_SLOTS.indexOf(b.timeSlot);
+                });
+            }, [shifts, todayStr]);
 
             return (
                 <div className="space-y-6 animate-in fade-in duration-500 font-black text-left">
@@ -323,8 +253,8 @@
                         </div>
                         <div className="grid grid-cols-1 gap-3">
                             {TIME_SLOTS.map(slot => {
-                                const activeStaff = todayShifts.filter(s => s.timeSlot === slot);
-                                const isTaniguchiHoliday = todayShifts.some(s => s.date === todayStr && s.taniguchiHoliday);
+                                const activeStaff = todayShiftsSorted.filter(s => s.timeSlot === slot);
+                                const isTaniguchiHoliday = shifts.some(s => s.date === todayStr && s.taniguchiHoliday);
                                 return (
                                     <div key={slot} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
                                         <div>
@@ -361,7 +291,7 @@
                         </div>
 
                         <div className="grid grid-cols-7 text-center text-[9px] font-black text-slate-300 mb-2 uppercase">
-                            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}
+                            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className={d==='Sun'?'text-rose-400':d==='Sat'?'text-indigo-400':''}>{d}</div>)}
                         </div>
 
                         <div className="calendar-grid">
@@ -369,7 +299,9 @@
                             {[...Array(daysInMonth)].map((_, i) => {
                                 const day = i + 1;
                                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                                const dayShifts = shifts.filter(s => s.date === dateStr);
+                                const dayShifts = shifts.filter(s => s.date === dateStr).sort((a, b) => {
+                                    return TIME_SLOTS.indexOf(a.timeSlot) - TIME_SLOTS.indexOf(b.timeSlot);
+                                });
                                 const isToday = dateStr === todayStr;
                                 const hasHoliday = dayShifts.some(s => s.taniguchiHoliday);
                                 
@@ -379,13 +311,14 @@
                                         <div className="w-full flex flex-col items-center overflow-hidden">
                                             {dayShifts.map((s, idx) => (
                                                 idx < 4 && s.staff !== "NONE" && (
-                                                    <div key={s.id} className="shift-chip bg-slate-50 text-slate-500">
-                                                        {s.timeSlot}: {s.staff}
+                                                    <div key={s.id} className="shift-chip bg-slate-50 text-slate-600 border-slate-100">
+                                                        <span className="text-[5px] text-indigo-400 block">{s.timeSlot.split('-')[0]}..</span>
+                                                        {s.staff}
                                                     </div>
                                                 )
                                             ))}
-                                            {dayShifts.filter(s => s.staff !== "NONE").length > 4 && <div className="text-[6px] text-slate-300">more..</div>}
-                                            {hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">休み</div>}
+                                            {dayShifts.filter(s => s.staff !== "NONE").length > 4 && <div className="text-[6px] text-slate-300">+ more</div>}
+                                            {hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">谷口休</div>}
                                         </div>
                                     </div>
                                 );
@@ -509,7 +442,7 @@
                         <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                             {['すべて', ...MANUAL_TAGS].map(t => (
-                                <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
+                                <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>
                             ))}
                         </div>
                     </div>
@@ -729,6 +662,10 @@
             const [bookings, setBookings] = useState([]);
             const [shifts, setShifts] = useState([]);
 
+            // Selection States for Maintenance LINE report
+            const [isSelectionMode, setIsSelectionMode] = useState(false);
+            const [selectedMaintIds, setSelectedMaintIds] = useState(new Set());
+
             // Modals
             const [showAddMaintenance, setShowAddMaintenance] = useState(false);
             const [editingMaintenanceRecord, setEditingMaintenanceRecord] = useState(null);
@@ -743,6 +680,7 @@
             const [selectedDayDetail, setSelectedDayDetail] = useState(null);
             const [selectedImage, setSelectedImage] = useState(null);
             const [showArchive, setShowArchive] = useState(false);
+            const [toastMessage, setToastMessage] = useState(null);
 
             const { methods, auth, db, appId, initialToken } = window.FirebaseSDK;
 
@@ -822,6 +760,43 @@
                 } catch(e) { console.error("Shift Bulk Save Error:", e); }
             };
 
+            const toggleLineSelection = (id) => {
+                setSelectedMaintIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                });
+            };
+
+            const handleGenerateLineReport = () => {
+                const selectedItems = records.filter(r => selectedMaintIds.has(r.id));
+                if (selectedItems.length === 0) return;
+
+                let text = "【メンテ報告】\n";
+                selectedItems.forEach(item => {
+                    text += `・${item.date || '日付不明'} [${item.facility}]\n  ${item.task}\n`;
+                });
+                text += "\n詳細はこちら→https://ion0002.pages.dev/";
+
+                // Copy to clipboard (legacy method for iFrame compatibility)
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                showToast("報告文をコピーしました！LINEに貼り付けて送信してください。");
+                setIsSelectionMode(false);
+                setSelectedMaintIds(new Set());
+            };
+
+            const showToast = (msg) => {
+                setToastMessage(msg);
+                setTimeout(() => setToastMessage(null), 3000);
+            };
+
             const filteredMaintenance = useMemo(() => {
                 const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
                 if (!maintenanceSearch) return base;
@@ -866,26 +841,73 @@
                         {activeTab === 'maintenance' && (
                             <div className="space-y-6 animate-in fade-in text-left font-black">
                                 <div className="flex justify-between items-center px-1 font-black">
-                                    <h2 className="text-sm text-slate-400 uppercase italic tracking-widest">{showArchive ? "All Archives" : "Latest Reports"}</h2>
-                                    <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>
+                                    <h2 className="text-sm text-slate-400 uppercase italic tracking-widest">{isSelectionMode ? "Select to Report" : (showArchive ? "All Archives" : "Latest Reports")}</h2>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => {
+                                                setIsSelectionMode(!isSelectionMode);
+                                                setSelectedMaintIds(new Set());
+                                            }} 
+                                            className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full shadow-md flex items-center gap-1 font-black transition-all`}
+                                        >
+                                            <Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />
+                                            {isSelectionMode ? "キャンセル" : "LINEで報告"}
+                                        </button>
+                                        {!isSelectionMode && (
+                                            <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="relative px-1">
                                     <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black" />
                                     <input type="text" placeholder="メンテ報告を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black outline-none shadow-sm" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} />
                                 </div>
                                 <div className="space-y-4">
-                                    {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10)).map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} />)}
+                                    {(showArchive ? filteredMaintenance : filteredMaintenance.slice(0, 10)).map(r => (
+                                        <MaintenanceCard 
+                                            key={r.id} 
+                                            record={r} 
+                                            onDelete={id => handleDelete('maintenance_records', id)} 
+                                            onEdit={setEditingMaintenanceRecord} 
+                                            onImageClick={setSelectedImage} 
+                                            selectionMode={isSelectionMode}
+                                            isSelected={selectedMaintIds.has(r.id)}
+                                            onToggleSelection={() => toggleLineSelection(r.id)}
+                                        />
+                                    ))}
                                 </div>
-                                <div className="pt-4 font-black">
-                                    <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-500 font-black shadow-sm active:scale-95 transition-all">
-                                        <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />{showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
-                                    </button>
-                                </div>
+                                {!isSelectionMode && (
+                                    <div className="pt-4 font-black">
+                                        <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-500 font-black shadow-sm active:scale-95 transition-all">
+                                            <Icon name={showArchive ? "ArrowUp" : "History"} size={16} />{showArchive ? "最新に戻る" : "過去のアーカイブをすべて見る"}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {activeTab === 'inventory' && <div className="space-y-4 font-black"><InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={(id, v) => handleUpdate('inventory', id, { stock: Math.max(0, v), lastChecked: new Date().toISOString() })} /></div>}
                         {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const el = document.body.appendChild(document.createElement('textarea')); el.value = txt; el.select(); document.execCommand('copy'); el.remove(); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                     </main>
+
+                    {/* Toast Message */}
+                    {toastMessage && (
+                        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black animate-in fade-in slide-in-from-top-4">
+                            {toastMessage}
+                        </div>
+                    )}
+
+                    {/* LINE Report Floating Bar */}
+                    {isSelectionMode && selectedMaintIds.size > 0 && (
+                        <div className="fixed bottom-24 left-4 right-4 z-50 animate-in slide-in-from-bottom-10">
+                            <button 
+                                onClick={handleGenerateLineReport}
+                                className="w-full bg-emerald-500 text-white py-4 rounded-[2rem] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all font-black"
+                            >
+                                <Icon name="MessageCircle" size={20} strokeWidth={3} />
+                                <span>選んだ項目を報告 ({selectedMaintIds.size}件)</span>
+                            </button>
+                        </div>
+                    )}
 
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] font-black">
                         <NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} />
@@ -913,7 +935,6 @@
                                     {selectedDayDetail.bookings.map(b => {
                                         const isIN = b.startDate === selectedDayDetail.day;
                                         const isOUT = b.endDate === selectedDayDetail.day;
-                                        // startDate <= currentDay < endDate なら「IN中」
                                         const isStaying = selectedDayDetail.day >= b.startDate && selectedDayDetail.day < b.endDate && !isIN;
                                         
                                         const statusLabel = isIN ? "IN" : isOUT ? "OUT" : isStaying ? "IN中" : "予約";
@@ -934,7 +955,6 @@
                                                 </div>
                                                 <BookingOptions booking={b} />
                                                 
-                                                {/* アイコンボタンを右下に配置してステータスとの重なりを回避 */}
                                                 <div className="absolute bottom-4 right-4 flex gap-3">
                                                     <button onClick={() => { setEditingBooking(b); setSelectedDayDetail(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors"><Icon name="Edit3" size={16} /></button>
                                                     <button onClick={() => handleDelete('bookings', b.id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Icon name="Trash2" size={16} /></button>
