@@ -19,9 +19,11 @@
         .day-cell:active { background-color: #f8fafc; transform: scale(0.98); }
         .day-num { font-size: 11px; font-weight: 900; margin-bottom: 2px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
         
+        /* 宿泊バッジ：オプション記号を含む */
         .booking-badge { font-size: 6px; font-weight: 900; color: white; padding: 1px 2px; border-radius: 2px; width: 98%; text-align: center; margin-bottom: 1px; line-height: 1.1; }
         .badge-options { font-size: 5px; opacity: 0.9; margin-left: 2px; letter-spacing: -0.5px; }
         
+        /* シフトバッジ */
         .shift-chip { font-size: 7px; padding: 1px 2px; border-radius: 3px; margin-bottom: 1px; width: 95%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; line-height: 1.1; border: 1px solid #e2e8f0; }
         
         .selection-check { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -126,7 +128,8 @@
             });
         }
 
-        // --- Common UI Components ---
+        // --- Sub-Components (Defined before usage in higher components) ---
+
         function NavItem({ active, iconName, label, onClick }) {
             return (
                 <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all active:scale-90 flex-1 ${active ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -163,64 +166,149 @@
             );
         }
 
-        // --- Component Definitions ---
+        function AddModal({ title, onClose, onSave, fields, hasImage, initialData = null }) {
+            const initial = {}; 
+            fields.forEach(f => { 
+                initial[f.name] = initialData ? (initialData[f.name] ?? (f.type === 'checkbox' ? false : (f.default || ''))) : (f.default || (f.type === 'select' ? f.options[0] : (f.type === 'checkbox' ? false : ''))); 
+            });
+            const [formData, setFormData] = useState(initial); 
+            const [images, setImages] = useState(initialData?.images || []); 
+            const [isSaving, setIsSaving] = useState(false); 
+            const fileRef = useRef();
+            const save = async (e) => { e.preventDefault(); setIsSaving(true); await onSave({ ...formData, images }); setIsSaving(false); onClose(); };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1500] flex items-end sm:items-center justify-center p-4 font-black text-left">
+                    <div className="bg-white w-full max-md:max-h-[90vh] rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto animate-in slide-in-from-bottom-5">
+                        <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black">{title}</h3><button onClick={onClose} className="p-2 text-slate-400">✕</button></div>
+                        <form onSubmit={save} className="space-y-4">
+                            <div className="grid gap-4">{fields.map(f => (<div key={f.name} className={`text-left ${f.type === 'checkbox' ? 'flex items-center gap-3 px-2 py-1' : 'space-y-1'}`}>{f.type === 'checkbox' ? (<><input type="checkbox" id={f.name} className="w-5 h-5 accent-indigo-600 rounded" checked={formData[f.name]} onChange={e => setFormData({...formData, [f.name]: e.target.checked})} /><label htmlFor={f.name} className="text-sm font-black text-slate-700">{f.label}</label></>) : (<><label className="text-[10px] text-slate-400 font-black pl-2">{f.label}</label>{f.type === 'select' ? (<select className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black outline-none" value={formData[f.name]} onChange={e => setFormData({...formData, [f.name]: e.target.value})}>{f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select>) : f.type === 'textarea' ? (<textarea className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-bold min-h-[100px] outline-none" value={formData[f.name]} onChange={e => setFormData({...formData, [f.name]: e.target.value})} required={f.required !== false} />) : (<input type={f.type} className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black outline-none" value={formData[f.name]} onChange={e => setFormData({...formData, [f.name]: e.target.value})} required={f.required !== false} />)}</>)}</div>))}</div>
+                            {hasImage && (<div className="space-y-2"><label className="text-[10px] text-slate-400 font-black pl-2">写真</label><div className="flex gap-2 overflow-x-auto py-2">{images.map((img, i) => (<div key={i} className="relative shrink-0"><img src={img} className="w-16 h-16 object-cover rounded-xl border" /><button type="button" onClick={() => {const ni=[...images]; ni.splice(i,1); setImages(ni);}} className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-1"><Icon name="X" size={10}/></button></div>))}<button type="button" onClick={() => fileRef.current.click()} className="w-16 h-16 bg-slate-50 border-2 border-dashed rounded-xl flex items-center justify-center text-slate-300"><Icon name="Camera" size={24} /></button></div><input type="file" ref={fileRef} className="hidden" multiple accept="image/*" onChange={async e => { const comp = await Promise.all(Array.from(e.target.files).map(f => compressImage(f))); setImages([...images, ...comp.filter(c => c)]); }} /></div>)}
+                            <button type="submit" disabled={isSaving} className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black shadow-xl">{isSaving ? "送信中..." : "保存する"}</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function ShiftBulkModal({ date, existingShifts, onClose, onSave }) {
+            const [selectedDate, setSelectedDate] = useState(date || new Date().toLocaleDateString('sv-SE'));
+            const [taniguchiHoliday, setTaniguchiHoliday] = useState(existingShifts.some(s => s.taniguchiHoliday));
+            const [assignments, setAssignments] = useState(() => { const initial = {}; TIME_SLOTS.forEach(slot => { initial[slot] = existingShifts.filter(s => s.timeSlot === slot).map(s => s.staff); }); return initial; });
+            const [isSaving, setIsSaving] = useState(false);
+            const toggleStaff = (slot, staff) => { setAssignments(prev => { const current = prev[slot] || []; if (current.includes(staff)) return { ...prev, [slot]: current.filter(s => s !== staff) }; else return { ...prev, [slot]: [...current, staff] }; }); };
+            const handleSave = async () => { setIsSaving(true); const flatShifts = []; Object.entries(assignments).forEach(([slot, staffs]) => { staffs.forEach(staff => { flatShifts.push({ date: selectedDate, timeSlot: slot, staff: staff, taniguchiHoliday: taniguchiHoliday }); }); }); if (flatShifts.length === 0 && taniguchiHoliday) flatShifts.push({ date: selectedDate, timeSlot: "OFF", staff: "NONE", taniguchiHoliday: true }); await onSave(selectedDate, flatShifts); setIsSaving(false); onClose(); };
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1500] flex items-end sm:items-center justify-center p-4 font-black">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-5">
+                        <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black">シフト一括登録</h3><button onClick={onClose} className="p-2 text-slate-400">✕</button></div>
+                        <div className="space-y-6 text-left">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                                <div className="space-y-1 flex-1 w-full"><label className="text-[10px] text-slate-400 font-black pl-2">対象日</label><input type="date" className="w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black outline-none" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} /></div>
+                                <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 px-5 py-3 rounded-2xl cursor-pointer" onClick={() => setTaniguchiHoliday(!taniguchiHoliday)}><input type="checkbox" className="w-5 h-5 accent-rose-600 rounded" checked={taniguchiHoliday} readOnly /><span className="text-sm font-black text-rose-600">谷口休み</span></div>
+                            </div>
+                            <div className="space-y-4">{TIME_SLOTS.map(slot => (<div key={slot} className="space-y-2"><div className="flex items-center gap-2"><span className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">{slot}</span><div className="h-[1px] flex-1 bg-slate-100"></div></div><div className="flex flex-wrap gap-2">{STAFF_LIST.map(staff => (<button key={staff} onClick={() => toggleStaff(slot, staff)} className={`px-3 py-2 rounded-xl text-[11px] font-black transition-all border ${assignments[slot]?.includes(staff) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{staff}</button>))}</div></div>))}</div>
+                            <button onClick={handleSave} disabled={isSaving} className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black shadow-xl">{isSaving ? "保存中..." : "保存する"}</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Higher Components ---
 
         function MaintenanceCard({ record, onDelete, onEdit, onImageClick, selectionMode, isSelected, onToggleSelection }) {
             const postDate = new Date(record.date || record.createdAt?.seconds * 1000 || Date.now());
             const isToday = postDate.toDateString() === new Date().toDateString();
-
             return (
-                <div 
-                    onClick={selectionMode ? onToggleSelection : undefined} 
-                    className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}
-                >
-                    {selectionMode && (
-                        <div className="absolute top-4 right-4 z-10">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
-                                {isSelected && <Icon name="Check" size={14} strokeWidth={4} />}
-                            </div>
-                        </div>
-                    )}
+                <div onClick={selectionMode ? onToggleSelection : undefined} className={`bg-white rounded-[2rem] p-5 shadow-sm border transition-all ${selectionMode ? (isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-100') : 'border-slate-100'} relative animate-in slide-in-from-bottom-2 font-black text-left cursor-pointer`}>
+                    {selectionMode && (<div className="absolute top-4 right-4 z-10"><div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>{isSelected && <Icon name="Check" size={14} strokeWidth={4} />}</div></div>)}
                     <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span>
-                            <span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>
-                            {isToday && <span className="bg-amber-100 text-amber-600 text-[8px] px-1.5 py-0.5 rounded font-black tracking-tighter">NEW</span>}
-                        </div>
-                        {!selectionMode && (
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500 p-1"><Icon name="Edit3" size={14} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500 p-1"><Icon name="Trash2" size={14} /></button>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[record.facility] || '#94A3B8'}}></span><span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>{isToday && <span className="bg-amber-100 text-amber-600 text-[8px] px-1.5 py-0.5 rounded font-black tracking-tighter">NEW</span>}</div>
+                        {!selectionMode && (<div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEdit(record); }} className="text-slate-300 hover:text-indigo-500 p-1"><Icon name="Edit3" size={14} /></button><button onClick={(e) => { e.stopPropagation(); onDelete(record.id); }} className="text-slate-300 hover:text-rose-500 p-1"><Icon name="Trash2" size={14} /></button></div>)}
                     </div>
                     <p className="text-slate-700 text-sm font-bold mb-4 whitespace-pre-wrap leading-relaxed">{record.task}</p>
-                    {record.images && record.images.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
-                            {record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}
+                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">{record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
+                    <div className="flex justify-between items-center text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50"><span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span><span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span></div>
+                </div>
+            );
+        }
+
+        function ManualCard({ manual, onCopy, onDelete, onImageClick, appId }) {
+            const [isEditing, setIsEditing] = useState(false);
+            const [editData, setEditData] = useState({ ...manual });
+            const [isSaving, setIsSaving] = useState(false);
+            const editFileRef = useRef(null);
+            const { db, methods } = window.FirebaseSDK;
+            const handleUpdate = async () => {
+                if (!editData.title || !editData.content) return;
+                setIsSaving(true);
+                try { await methods.updateDoc(methods.doc(db, 'artifacts', appId, 'public', 'data', 'manuals', manual.id), { ...editData, updatedAt: methods.serverTimestamp() }); setIsEditing(false); } catch (e) { console.error(e); } finally { setIsSaving(false); }
+            };
+            if (isEditing) {
+                return (
+                    <div className="bg-white rounded-[2.5rem] p-6 shadow-xl border-2 border-indigo-500 animate-in zoom-in-95 text-left font-black">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                <select className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs font-black" value={editData.facility} onChange={e => setEditData({...editData, facility: e.target.value})}>{MANUAL_FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select>
+                                <select className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs font-black" value={editData.tag} onChange={e => setEditData({...editData, tag: e.target.value})}>{MANUAL_TAGS.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                            </div>
+                            <input className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-sm font-black" value={editData.title} onChange={e => setEditData({...editData, title: e.target.value})} placeholder="タイトル" />
+                            <textarea className="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs h-32 font-bold" value={editData.content} onChange={e => setEditData({...editData, content: e.target.value})} placeholder="内容" />
+                            <div className="flex gap-2 overflow-x-auto py-2">
+                                {editData.images?.map((img, i) => (
+                                    <div key={i} className="relative shrink-0"><img src={img} className="w-16 h-16 object-cover rounded-lg" /><button onClick={() => { const ni = [...editData.images]; ni.splice(i, 1); setEditData({...editData, images: ni}); }} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1"><Icon name="X" size={10} /></button></div>
+                                ))}
+                                <button onClick={() => editFileRef.current.click()} className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 border-2 border-dashed"><Icon name="Camera" size={20} /></button>
+                                <input type="file" ref={editFileRef} className="hidden" multiple accept="image/*" onChange={async (e) => { const comp = await Promise.all(Array.from(e.target.files).map(f => compressImage(f))); setEditData({...editData, images: [...(editData.images || []), ...comp]}); }} />
+                            </div>
+                            <div className="flex gap-2"><button onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-black">キャンセル</button><button onClick={handleUpdate} disabled={isSaving} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black">{isSaving ? "保存中..." : "保存"}</button></div>
                         </div>
-                    )}
-                    <div className="flex justify-between items-center text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50">
-                        <span className="flex items-center gap-1"><Icon name="User" size={10} /> {record.staff}</span>
-                        <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
+                    </div>
+                );
+            }
+            return (
+                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden text-left font-black text-slate-800">
+                    <div className="p-5">
+                        <div className="flex justify-between items-start mb-3">
+                            <div className="flex flex-wrap gap-2"><span className="text-[9px] font-black px-2.5 py-1 rounded-full text-white" style={{backgroundColor: FACILITY_COLORS[manual.facility] || '#94A3B8'}}>{manual.facility}</span><span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{manual.tag || 'その他'}</span></div>
+                            <div className="flex gap-1"><button onClick={() => setIsEditing(true)} className="text-slate-200 hover:text-indigo-500 p-1"><Icon name="Edit3" size={14} /></button><button onClick={() => onDelete(manual.id)} className="text-slate-200 hover:text-rose-500 p-1"><Icon name="Trash2" size={14} /></button></div>
+                        </div>
+                        <h3 className="text-slate-800 text-base mb-3 font-black">{manual.title}</h3>
+                        <p className="text-slate-600 text-xs font-bold leading-relaxed whitespace-pre-wrap bg-slate-50/80 p-4 rounded-2xl mb-3">{manual.content}</p>
+                        {manual.images && manual.images.length > 0 && <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{manual.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(img)} className="w-24 h-24 object-cover rounded-2xl shadow-sm border shrink-0" />)}</div>}
+                        <div className="flex justify-end pt-2"><button onClick={() => onCopy(manual.content)} className="text-indigo-400 text-[10px] flex items-center gap-1 px-3 py-1 bg-indigo-50 rounded-full active:scale-95 font-black"><Icon name="Copy" size={12} /> コピーする</button></div>
                     </div>
                 </div>
             );
+        }
+
+        // --- TAB SECTIONS ---
+
+        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onDelete, onImageClick }) {
+            const sorted = useMemo(() => {
+                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
+                const list = [...base].sort((a, b) => {
+                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
+                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
+                    return timeB - timeA;
+                });
+                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+            }, [records, selectedFacility, maintenanceSearch]);
+            const displayList = showArchive ? sorted : sorted.slice(0, 10);
+            return (<div className="space-y-4">{displayList.map(r => (<MaintenanceCard key={r.id} record={r} onDelete={onDelete} onEdit={onEdit} onImageClick={onImageClick} selectionMode={selectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => onToggleSelection(r.id)} />))} {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">メンテナンス報告はありません</div>}</div>);
         }
 
         function InventorySection({ items, onOpenAdd, onUpdateStock, onEdit, onDelete }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterLoc, setFilterLoc] = useState('All');
             const lowStockItems = useMemo(() => items.filter(item => Number(item.stock) <= Number(item.threshold || 5)), [items]);
-            
             const grouped = useMemo(() => {
                 const filtered = items.filter(i => (i.name || "").toLowerCase().includes(searchTerm.toLowerCase()) && (filterLoc === 'All' || i.location === filterLoc));
                 const groups = {}; 
                 filtered.forEach(i => { 
-                    const n = i.name.trim(); 
-                    if (!groups[n]) groups[n] = { name: n, total: 0, items: [], low: false }; 
-                    groups[n].items.push(i); 
-                    groups[n].total += Number(i.stock); 
+                    const n = i.name.trim(); if (!groups[n]) groups[n] = { name: n, total: 0, items: [], low: false }; 
+                    groups[n].items.push(i); groups[n].total += Number(i.stock); 
                     if (Number(i.stock) <= (i.threshold || 5)) groups[n].low = true; 
                 });
                 return Object.values(groups).sort((a,b) => a.name.localeCompare(b.name, 'ja'));
@@ -228,12 +316,7 @@
 
             return (
                 <div className="space-y-4 animate-in fade-in font-black pb-10 text-left">
-                    {lowStockItems.length > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm">
-                            <div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div>
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div>
-                        </div>
-                    )}
+                    {lowStockItems.length > 0 && (<div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex flex-col gap-2 shadow-sm"><div className="flex items-center gap-2 text-rose-600 font-black text-sm"><Icon name="AlertTriangle" size={18} /><span>補充が必要 ({lowStockItems.length}件)</span></div><div className="flex gap-2 overflow-x-auto no-scrollbar">{lowStockItems.map(item => (<div key={item.id} className="bg-white px-3 py-1.5 rounded-full text-[10px] text-rose-500 border border-rose-100 whitespace-nowrap font-black">{item.name} ({item.location})</div>))}</div></div>)}
                     <div className="relative"><Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="品目検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['All', ...INVENTORY_LOCATIONS].map(l => (<button key={l} onClick={() => setFilterLoc(l)} className={`px-4 py-1.5 rounded-full border text-[11px] whitespace-nowrap transition-all font-black ${filterLoc === l ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}>{l === 'All' ? '全拠点' : l}</button>))}</div>
                     <div className="space-y-4">
@@ -241,35 +324,20 @@
                             <div key={g.name} className={`bg-white rounded-[2rem] border overflow-hidden shadow-sm font-black ${g.low ? 'border-rose-200' : 'border-slate-100'}`}>
                                 <div className={`p-4 flex items-center gap-3 font-black ${g.low ? 'bg-rose-50/30' : 'bg-slate-50/10'}`}>
                                     <div className="w-12 h-12 bg-white rounded-xl border flex items-center justify-center font-black shrink-0">{g.items[0]?.images?.[0] ? <img src={g.items[0].images[0]} className="w-full h-full object-cover rounded-xl" /> : <Icon name="Package" size={20} color={g.low ? "#F43F5E" : "#CBD5E1"} />}</div>
-                                    <div className="flex-1 min-w-0 font-black">
-                                        <h3 className="text-sm font-black truncate">{g.name}</h3>
-                                        <div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div>
-                                    </div>
+                                    <div className="flex-1 min-w-0 font-black"><h3 className="text-sm font-black truncate">{g.name}</h3><div className="text-[10px] text-slate-300 font-black">確認: {formatDateTime(g.items[0]?.lastChecked)}</div></div>
                                     <div className={`text-xl font-black ${g.low ? 'text-rose-600' : 'text-indigo-600'}`}>{g.total}</div>
                                 </div>
                                 <div className="divide-y divide-slate-50">
                                     {g.items.map(item => {
                                         const diff = Number(item.stock) - Number(item.prevStock ?? item.stock);
                                         const diffStr = diff > 0 ? `+${diff}個補充` : diff < 0 ? `${diff}` : "";
-                                        
                                         return (
                                             <div key={item.id} className="p-4 flex justify-between items-center group">
                                                 <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span>
-                                                    </div>
-                                                    {item.prevChecked && (
-                                                        <div className="text-[8px] text-slate-400 font-black leading-tight">
-                                                            前回: {formatDateTime(item.prevChecked)} 
-                                                            {diffStr && <span className={`ml-1 ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>({diffStr})</span>}
-                                                        </div>
-                                                    )}
+                                                    <div className="flex items-center gap-2"><span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.stock <= (item.threshold || 5) ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>{item.location}</span></div>
+                                                    {item.prevChecked && (<div className="text-[8px] text-slate-400 font-black leading-tight">前回: {formatDateTime(item.prevChecked)} {diffStr && <span className={`ml-1 ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>({diffStr})</span>}</div>)}
                                                 </div>
-                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black">
-                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button>
-                                                    <span className="text-xs font-black w-6 text-center">{item.stock}</span>
-                                                    <button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button>
-                                                </div>
+                                                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl shadow-inner font-black"><button onClick={() => onUpdateStock(item.id, Number(item.stock)-1)} className="text-slate-300 p-1 active:text-rose-50 font-black"><Icon name="MinusCircle" size={18} /></button><span className="text-xs font-black w-6 text-center">{item.stock}</span><button onClick={() => onUpdateStock(item.id, Number(item.stock)+1)} className="text-slate-300 p-1 active:text-indigo-50 font-black"><Icon name="PlusCircle" size={18} /></button></div>
                                             </div>
                                         );
                                     })}
@@ -277,7 +345,7 @@
                             </div>
                         ))}
                     </div>
-                    <button onClick={onOpenAdd} className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 transition-transform font-black"><Icon name="Plus" size={28} /></button>
+                    <button onClick={onOpenAdd} className="fixed bottom-24 right-6 bg-indigo-600 text-white w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 font-black"><Icon name="Plus" size={28} /></button>
                 </div>
             );
         }
@@ -285,56 +353,28 @@
         function ShiftSection({ shifts, onOpenAdd, onDelete, onEdit }) {
             const todayStr = new Date().toLocaleDateString('sv-SE');
             const [viewDate, setViewDate] = useState(new Date());
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-            const firstDayIndex = new Date(year, month, 1).getDay();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const year = viewDate.getFullYear(); const month = viewDate.getMonth();
+            const firstDayIndex = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
             const todayShifts = useMemo(() => shifts.filter(s => s.date === todayStr).sort((a,b) => TIME_SLOTS.indexOf(a.timeSlot) - TIME_SLOTS.indexOf(b.timeSlot)), [shifts, todayStr]);
-
             return (
                 <div className="space-y-6 animate-in fade-in duration-500 font-black text-left">
-                    <section className="space-y-3">
-                        <div className="flex justify-between items-center px-1"><h2 className="text-sm text-slate-400 uppercase italic font-black">Today's Shift</h2><button onClick={onOpenAdd} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> シフト一括登録</button></div>
+                    <section className="space-y-3"><div className="flex justify-between items-center px-1"><h2 className="text-sm text-slate-400 uppercase italic font-black">Today's Shift</h2><button onClick={onOpenAdd} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> シフト一括登録</button></div>
                         <div className="grid grid-cols-1 gap-3">
                             {TIME_SLOTS.map(slot => {
                                 const activeStaff = todayShifts.filter(s => s.timeSlot === slot);
                                 const isTaniguchiHoliday = shifts.some(s => s.date === todayStr && s.taniguchiHoliday);
-                                return (
-                                    <div key={slot} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
-                                        <div>
-                                            <span className="text-[10px] text-indigo-500 font-black block mb-0.5">{slot}</span>
-                                            <div className="flex flex-wrap gap-2">{activeStaff.length > 0 ? activeStaff.map(s => <span key={s.id} className="text-slate-800 text-base font-black">{s.staff}</span>) : <span className="text-slate-300 italic text-sm">予定なし</span>}</div>
-                                        </div>
-                                        {isTaniguchiHoliday && <span className="text-rose-500 text-[10px] font-black border border-rose-200 bg-rose-50 px-2 py-1 rounded-full flex items-center gap-1"><Icon name="CalendarOff" size={10} /> 谷口休み</span>}
-                                    </div>
-                                );
+                                return (<div key={slot} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center"><div><span className="text-[10px] text-indigo-500 font-black block mb-0.5">{slot}</span><div className="flex flex-wrap gap-2">{activeStaff.length > 0 ? activeStaff.map(s => <span key={s.id} className="text-slate-800 text-base font-black">{s.staff}</span>) : <span className="text-slate-300 italic text-sm">予定なし</span>}</div></div>{isTaniguchiHoliday && <span className="text-rose-500 text-[10px] font-black border border-rose-200 bg-rose-50 px-2 py-1 rounded-full flex items-center gap-1"><Icon name="CalendarOff" size={10} /> 谷口休み</span>}</div>);
                             })}
                         </div>
                     </section>
                     <section className="bg-white p-4 rounded-[2.5rem] shadow-sm border border-slate-100">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="flex items-center gap-2 text-slate-800 font-black"><Icon name="ClipboardList" size={18} color="#6366F1" />{year}年 {month + 1}月 シフト表</h2>
-                            <div className="flex gap-1"><button onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronLeft" size={20} /></button><button onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronRight" size={20} /></button></div>
-                        </div>
+                        <div className="flex items-center justify-between mb-4"><h2 className="flex items-center gap-2 text-slate-800 font-black"><Icon name="ClipboardList" size={18} color="#6366F1" />{year}年 {month + 1}月 シフト表</h2><div className="flex gap-1"><button onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronLeft" size={20} /></button><button onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1.5 text-slate-400"><Icon name="ChevronRight" size={20} /></button></div></div>
                         <div className="grid grid-cols-7 text-center text-[9px] font-black text-slate-300 mb-2 uppercase">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className={d==='Sun'?'text-rose-400':d==='Sat'?'text-indigo-400':''}>{d}</div>)}</div>
                         <div className="calendar-grid">
                             {[...Array(firstDayIndex)].map((_, i) => <div key={`empty-${i}`} className="day-cell bg-slate-50/20"></div>)}
                             {[...Array(daysInMonth)].map((_, i) => {
-                                const day = i + 1;
-                                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                                const dayShifts = shifts.filter(s => s.date === dateStr).sort((a,b) => TIME_SLOTS.indexOf(a.timeSlot) - TIME_SLOTS.indexOf(b.timeSlot));
-                                const isToday = dateStr === todayStr;
-                                const hasHoliday = dayShifts.some(s => s.taniguchiHoliday);
-                                return (
-                                    <div key={day} className="day-cell" onClick={() => onEdit(dateStr)}>
-                                        <div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div>
-                                        <div className="w-full flex flex-col items-center overflow-hidden">
-                                            {dayShifts.filter(s => s.staff !== "NONE").map((s, idx) => idx < 6 && <div key={s.id} className="shift-chip bg-slate-50 text-slate-600 border-slate-100"><span className="text-[5px] text-indigo-400 block">{s.timeSlot.split('-')[0]}..</span>{s.staff}</div>)}
-                                            {dayShifts.filter(s => s.staff !== "NONE").length > 6 && <div className="text-[6px] text-slate-300">+ more</div>}
-                                            {hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">谷口休</div>}
-                                        </div>
-                                    </div>
-                                );
+                                const day = i + 1; const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`; const dayShifts = shifts.filter(s => s.date === dateStr).sort((a,b) => TIME_SLOTS.indexOf(a.timeSlot) - TIME_SLOTS.indexOf(b.timeSlot)); const isToday = dateStr === todayStr; const hasHoliday = dayShifts.some(s => s.taniguchiHoliday);
+                                return (<div key={day} className="day-cell" onClick={() => onEdit(dateStr)}><div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div><div className="w-full flex flex-col items-center overflow-hidden">{dayShifts.filter(s => s.staff !== "NONE").map((s, idx) => idx < 6 && <div key={s.id} className="shift-chip bg-slate-50 text-slate-600 border-slate-100"><span className="text-[5px] text-indigo-400 block">{s.timeSlot.split('-')[0]}..</span>{s.staff}</div>)}{dayShifts.filter(s => s.staff !== "NONE").length > 6 && <div className="text-[6px] text-slate-300">+ more</div>}{hasHoliday && <div className="shift-chip bg-rose-50 text-rose-500 border-rose-100">谷口休</div>}</div></div>);
                             })}
                         </div>
                     </section>
@@ -342,7 +382,7 @@
             );
         }
 
-        function ScheduleSection({ selectedFacility, bookings, onOpenAdd, onOpenDetail }) {
+        function ScheduleSectionWrapper({ selectedFacility, bookings, onOpenAdd, onOpenDetail }) {
             const todayStr = new Date().toLocaleDateString('sv-SE');
             const [viewDate, setViewDate] = useState(new Date());
             const year = viewDate.getFullYear(); const month = viewDate.getMonth();
@@ -350,15 +390,11 @@
             const todayList = useMemo(() => bookings.filter(b => b.startDate === todayStr || b.endDate === todayStr || (todayStr > b.startDate && todayStr < b.endDate)).filter(b => selectedFacility === 'all' || b.facility === selectedFacility), [bookings, todayStr, selectedFacility]);
             return (
                 <div className="space-y-6 animate-in fade-in duration-500 font-black text-left">
-                    <section className="space-y-3">
-                        <div className="flex justify-between items-center px-1"><h2 className="text-sm text-slate-400 uppercase italic">Today's Highlight</h2><button onClick={onOpenAdd} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 予約登録</button></div>
+                    <section className="space-y-3"><div className="flex justify-between items-center px-1"><h2 className="text-sm text-slate-400 uppercase italic">Today's Highlight</h2><button onClick={onOpenAdd} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 予約登録</button></div>
                         <div className="grid gap-3 font-black">
                             {todayList.length > 0 ? todayList.map((b, i) => (
                                 <div key={i} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-start gap-4 group">
-                                    <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black text-[9px] ${b.startDate === todayStr ? 'bg-emerald-50 text-emerald-600' : b.endDate === todayStr ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'} shrink-0`}>
-                                        <Icon name={b.startDate === todayStr ? 'LogIn' : b.endDate === todayStr ? 'LogOut' : 'Bed'} size={16} />
-                                        <span>{b.startDate === todayStr ? 'IN' : b.endDate === todayStr ? 'OUT' : 'Stay'}</span>
-                                    </div>
+                                    <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black text-[9px] ${b.startDate === todayStr ? 'bg-emerald-50 text-emerald-600' : b.endDate === todayStr ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'} shrink-0`}><Icon name={b.startDate === todayStr ? 'LogIn' : b.endDate === todayStr ? 'LogOut' : 'Bed'} size={16} /><span>{b.startDate === todayStr ? 'IN' : b.endDate === todayStr ? 'OUT' : 'Stay'}</span></div>
                                     <div className="flex-1 min-w-0 font-black"><div className="flex items-center gap-2 mb-0.5"><span className="w-2 h-2 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span><span className="text-[10px] text-slate-400 font-black">{b.facility} · {b.people}名</span></div><div className="text-slate-800 text-lg font-black truncate">{b.guestName} 様</div><BookingOptions booking={b} /></div>
                                 </div>
                             )) : <div className="py-10 text-center text-slate-300 italic bg-white rounded-[2rem] border-dashed border-2 font-black">本日の宿泊はありません</div>}
@@ -370,32 +406,8 @@
                         <div className="calendar-grid">
                             {[...Array(firstDayIndex)].map((_, i) => <div key={`empty-${i}`} className="day-cell bg-slate-50/20"></div>)}
                             {[...Array(daysInMonth)].map((_, i) => {
-                                const day = i + 1; const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`; 
-                                const dayBookings = bookings.filter(b => dateStr >= b.startDate && dateStr <= b.endDate);
-                                const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
-                                return (
-                                    <div key={day} className="day-cell" onClick={() => onOpenDetail({ day: dateStr, bookings: dayBookings })}>
-                                        <div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div>
-                                        <div className="w-full flex flex-col items-center gap-0.5 px-0.5 overflow-hidden">
-                                            {dayBookings.filter(db => selectedFacility === 'all' || db.facility === selectedFacility).slice(0, 4).map(db => {
-                                                const isIN = db.startDate === dateStr;
-                                                const isOUT = db.endDate === dateStr;
-                                                const isMiddle = dateStr > db.startDate && dateStr < db.endDate;
-                                                const statusLabel = isIN ? "IN" : isOUT ? "OUT" : isMiddle ? "中" : "";
-                                                if (!statusLabel) return null;
-                                                return (
-                                                    <div key={db.id} className="booking-badge flex items-center justify-between" style={{backgroundColor: FACILITY_COLORS[db.facility]}}>
-                                                        <span className="truncate">{db.facility}{statusLabel}</span>
-                                                        <span className="badge-options">
-                                                            {db.babyCrib && "ベ"}{db.babyBath && "バ"}{db.babyChair && "チ"}{db.luggage && "荷"}{db.notes && "＊"}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {dayBookings.length > 4 && <div className="text-[5px] text-slate-300">+{dayBookings.length - 4}</div>}
-                                        </div>
-                                    </div>
-                                );
+                                const day = i + 1; const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`; const dayBookings = bookings.filter(b => dateStr >= b.startDate && dateStr <= b.endDate); const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
+                                return (<div key={day} className="day-cell" onClick={() => onOpenDetail({ day: dateStr, bookings: dayBookings })}><div className={`day-num font-black ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</div><div className="w-full flex flex-col items-center gap-0.5 px-0.5 overflow-hidden">{dayBookings.filter(db => selectedFacility === 'all' || db.facility === selectedFacility).slice(0, 4).map(db => { const isIN = db.startDate === dateStr; const isOUT = db.endDate === dateStr; const isMiddle = dateStr > db.startDate && dateStr < db.endDate; const statusLabel = isIN ? "IN" : isOUT ? "OUT" : isMiddle ? "中" : ""; if (!statusLabel) return null; return (<div key={db.id} className="booking-badge flex items-center justify-between" style={{backgroundColor: FACILITY_COLORS[db.facility]}}><span className="truncate">{db.facility}{statusLabel}</span><span className="badge-options">{db.babyCrib && "ベ"}{db.babyBath && "バ"}{db.babyChair && "チ"}{db.luggage && "荷"}{db.notes && "＊"}</span></div>); })}{dayBookings.length > 4 && <div className="text-[5px] text-slate-300">+{dayBookings.length - 4}</div>}</div></div>);
                             })}
                         </div>
                     </section>
@@ -403,41 +415,18 @@
             );
         }
 
-        function ManualSectionWrapper({ manuals, selectedFacility, onOpenAdd, onCopy, onDelete, onImageClick, appId }) {
+        function ManualSectionWrapperContainer({ manuals, selectedFacility, onOpenAdd, onCopy, onDelete, onImageClick, appId }) {
             const [activeType, setActiveType] = useState('manual'); 
             const [facilityFilter, setFacilityFilter] = useState('すべて');
             const [tagFilter, setTagFilter] = useState('すべて');
             const [searchTerm, setSearchTerm] = useState('');
-            const filtered = useMemo(() => manuals.filter(m => {
-                const matchType = m.type === activeType;
-                const matchFacility = facilityFilter === 'すべて' || m.facility === facilityFilter;
-                const matchTag = tagFilter === 'すべて' || m.tag === tagFilter;
-                const matchGlobalFacility = selectedFacility === 'all' || m.facility === '共通' || m.facility === selectedFacility;
-                const matchSearch = searchTerm === '' || (m.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (m.content || "").toLowerCase().includes(searchTerm.toLowerCase());
-                return matchType && matchFacility && matchTag && matchGlobalFacility && matchSearch;
-            }), [manuals, activeType, facilityFilter, tagFilter, selectedFacility, searchTerm]);
+            const filtered = useMemo(() => manuals.filter(m => { const matchType = m.type === activeType; const matchFacility = facilityFilter === 'すべて' || m.facility === facilityFilter; const matchTag = tagFilter === 'すべて' || m.tag === tagFilter; const matchGlobalFacility = selectedFacility === 'all' || m.facility === '共通' || m.facility === selectedFacility; const matchSearch = searchTerm === '' || (m.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (m.content || "").toLowerCase().includes(searchTerm.toLowerCase()); return matchType && matchFacility && matchTag && matchGlobalFacility && matchSearch; }), [manuals, activeType, facilityFilter, tagFilter, selectedFacility, searchTerm]);
             return (
                 <div className="space-y-5 animate-in fade-in duration-300 text-left font-black pb-10">
-                    <div className="flex bg-white p-1 rounded-2xl border shadow-sm mx-1">
-                        <button onClick={() => setActiveType('manual')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="BookOpen" size={14} /> マニュアル</button>
-                        <button onClick={() => setActiveType('faq')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'faq' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="MessageSquare" size={14} /> よくある質問</button>
-                    </div>
-                    <div className="px-1 relative">
-                        <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                    </div>
-                    <div className="space-y-2 px-1">
-                        <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label>
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                            {['すべて', ...MANUAL_FACILITIES].map(f => <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>)}
-                        </div>
-                    </div>
-                    <div className="space-y-2 px-1">
-                        <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label>
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                            {['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}
-                        </div>
-                    </div>
+                    <div className="flex bg-white p-1 rounded-2xl border shadow-sm mx-1"><button onClick={() => setActiveType('manual')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="BookOpen" size={14} /> マニュアル</button><button onClick={() => setActiveType('faq')} className={`flex-1 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 ${activeType === 'faq' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="MessageSquare" size={14} /> よくある質問</button></div>
+                    <div className="px-1 relative"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+                    <div className="space-y-2 px-1"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_FACILITIES].map(f => <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>)}</div></div>
+                    <div className="space-y-2 px-1"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}</div></div>
                     <div className="grid gap-4 px-1">{filtered.map(m => <ManualCard key={m.id} manual={m} onCopy={onCopy} onDelete={onDelete} onImageClick={onImageClick} appId={appId} />)}</div>
                     <div className="flex justify-center pt-4"><button onClick={onOpenAdd} className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] shadow-xl flex items-center gap-2 font-black"><Icon name="Plus" size={20} /> 新規情報を追加</button></div>
                 </div>
@@ -445,6 +434,7 @@
         }
 
         // --- Main App Component ---
+
         function App() {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('schedule');
@@ -504,12 +494,7 @@
             const handleUpdateStock = async (id, v) => {
                 const item = inventoryItems.find(i => i.id === id);
                 if (!item) return;
-                await handleUpdate('inventory', id, {
-                    prevStock: item.stock,
-                    prevChecked: item.lastChecked || item.createdAt?.toDate().toISOString() || new Date().toISOString(),
-                    stock: Math.max(0, v),
-                    lastChecked: new Date().toISOString()
-                });
+                await handleUpdate('inventory', id, { prevStock: item.stock, prevChecked: item.lastChecked || item.createdAt?.toDate().toISOString() || new Date().toISOString(), stock: Math.max(0, v), lastChecked: new Date().toISOString() });
             };
 
             const handleSaveShiftBulk = async (date, newShifts) => {
@@ -522,7 +507,6 @@
             const handleGenerateLineReport = () => {
                 const selectedItems = records.filter(r => selectedMaintIds.has(r.id));
                 if (selectedItems.length === 0) return;
-                
                 let text = "【メンテ報告まとめ】\n━━━━━━━━━━━━\n";
                 selectedItems.forEach((item, idx) => {
                     text += `■ ${item.date || '日付不明'} (${item.facility})\n`;
@@ -531,34 +515,18 @@
                     if (idx < selectedItems.length - 1) text += "--------------------\n";
                 });
                 text += "━━━━━━━━━━━━\n詳細はこちら→ https://ion0002.pages.dev/";
-                
                 const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
                 setToastMessage("コピーしました！LINEへ貼り付けてください。"); setTimeout(() => setToastMessage(null), 3000);
                 setIsSelectionMode(false); setSelectedMaintIds(new Set());
             };
 
-            const sortedMaintenance = useMemo(() => {
-                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
-                const sorted = [...base].sort((a, b) => {
-                    const timeA = a.createdAt?.seconds || new Date(a.date).getTime() / 1000 || 0;
-                    const timeB = b.createdAt?.seconds || new Date(b.date).getTime() / 1000 || 0;
-                    return timeB - timeA;
-                });
-                return maintenanceSearch ? sorted.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : sorted;
-            }, [records, selectedFacility, maintenanceSearch]);
-
             return (
                 <div className="min-h-screen pb-24 overflow-x-hidden bg-slate-50 font-black text-left">
-                    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
-                        <h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1>
-                        <select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black outline-none"><option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select>
-                    </header>
+                    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm"><h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1><select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black outline-none"><option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select></header>
                     <main className="p-4 max-w-md mx-auto space-y-6">
-                        {(!user || !dataLoaded) ? (
-                            <div className="flex flex-col items-center justify-center py-40 text-slate-400 gap-4"><Icon name="RefreshCw" className="animate-spin" size={32} /><p>最新データを同期中...</p></div>
-                        ) : (
+                        {(!user || !dataLoaded) ? (<div className="flex flex-col items-center justify-center py-40 text-slate-400 gap-4"><Icon name="RefreshCw" className="animate-spin" size={32} /><p>最新データを同期中...</p></div>) : (
                             <>
-                                {activeTab === 'schedule' && <ScheduleSection selectedFacility={selectedFacility} bookings={bookings} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
+                                {activeTab === 'schedule' && <ScheduleSectionWrapper selectedFacility={selectedFacility} bookings={bookings} onOpenAdd={() => setShowAddBooking(true)} onOpenDetail={setSelectedDayDetail} />}
                                 {activeTab === 'shift' && <ShiftSection shifts={shifts} onOpenAdd={() => { setSelectedShiftDate(null); setShowShiftBulk(true); }} onDelete={id => handleDelete('shifts', id)} onEdit={(date) => { setSelectedShiftDate(date); setShowShiftBulk(true); }} />}
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6">
@@ -570,59 +538,35 @@
                                             </div>
                                         </div>
                                         <div className="relative px-1"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="メンテ内容で検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
-                                        <div className="space-y-4">{(showArchive ? sortedMaintenance : sortedMaintenance.slice(0, 10)).map(r => <MaintenanceCard key={r.id} record={r} onDelete={id => handleDelete('maintenance_records', id)} onEdit={setEditingMaintenanceRecord} onImageClick={setSelectedImage} selectionMode={isSelectionMode} isSelected={selectedMaintIds.has(r.id)} onToggleSelection={() => { const n = new Set(selectedMaintIds); if(n.has(r.id)) n.delete(r.id); else n.add(r.id); setSelectedMaintIds(n); }} />)}</div>
+                                        <MaintenanceCardList records={records} selectedFacility={selectedFacility} maintenanceSearch={maintenanceSearch} showArchive={showArchive} selectionMode={isSelectionMode} selectedMaintIds={selectedMaintIds} onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} onEdit={setEditingMaintenanceRecord} onDelete={id => handleDelete('maintenance_records', id)} onImageClick={setSelectedImage} />
                                         {!isSelectionMode && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm">{showArchive ? "最新の10件を表示" : "すべての履歴を見る"}</button>}
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={handleUpdateStock} />}
-                                {activeTab === 'manual' && <ManualSectionWrapper manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("本文をコピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
+                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={() => setShowAddManual(true)} onCopy={txt => { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); setToastMessage("本文をコピーしました"); setTimeout(() => setToastMessage(null), 2000); }} onDelete={id => handleDelete('manuals', id)} onImageClick={setSelectedImage} appId={appId} />}
                             </>
                         )}
                     </main>
-
                     {toastMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black animate-in fade-in tracking-tight">{toastMessage}</div>}
                     {isSelectionMode && selectedMaintIds.size > 0 && <div className="fixed bottom-24 left-4 right-4 z-50 animate-in slide-in-from-bottom-10"><button onClick={handleGenerateLineReport} className="w-full bg-emerald-500 text-white py-4 rounded-[2rem] shadow-xl flex items-center justify-center gap-3 font-black"><Icon name="MessageCircle" size={20} strokeWidth={3} />選んだ項目を報告 ({selectedMaintIds.size}件)</button></div>}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-lg font-black"><NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} /><NavItem active={activeTab === 'shift'} iconName="Calendar" label="シフト" onClick={() => setActiveTab('shift')} /><NavItem active={activeTab === 'maintenance'} iconName="Wrench" label="メンテ" onClick={() => setActiveTab('maintenance')} /><NavItem active={activeTab === 'inventory'} iconName="Package" label="備品" onClick={() => setActiveTab('inventory')} /><NavItem active={activeTab === 'manual'} iconName="BookOpen" label="マニュアル" onClick={() => setActiveTab('manual')} /></nav>
 
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-lg font-black">
-                        <NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} />
-                        <NavItem active={activeTab === 'shift'} iconName="Calendar" label="シフト" onClick={() => setActiveTab('shift')} />
-                        <NavItem active={activeTab === 'maintenance'} iconName="Wrench" label="メンテ" onClick={() => setActiveTab('maintenance')} />
-                        <NavItem active={activeTab === 'inventory'} iconName="Package" label="備品" onClick={() => setActiveTab('inventory')} />
-                        <NavItem active={activeTab === 'manual'} iconName="BookOpen" label="マニュアル" onClick={() => setActiveTab('manual')} />
-                    </nav>
-
-                    {/* Modals */}
                     {showAddBooking && <AddModal title="予約登録" onClose={() => setShowAddBooking(false)} onSave={d => handleSave('bookings', d)} fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'guestName', label: 'ゲスト名', type: 'text' }, { name: 'people', label: '人数', type: 'number', default: 1 }, { name: 'startDate', label: 'IN日', type: 'date' }, { name: 'endDate', label: 'OUT日', type: 'date' }, { name: 'babyCrib', label: 'ベビーベッド', type: 'checkbox' }, { name: 'babyBath', label: 'ベビーバス', type: 'checkbox' }, { name: 'babyChair', label: 'ベビーチェア', type: 'checkbox' }, { name: 'luggage', label: '荷物預かり', type: 'checkbox' }, { name: 'notes', label: '備考', type: 'textarea', required: false }]} />}
                     {showShiftBulk && <ShiftBulkModal date={selectedShiftDate || new Date().toLocaleDateString('sv-SE')} existingShifts={shifts.filter(s => s.date === (selectedShiftDate || new Date().toLocaleDateString('sv-SE')))} onClose={() => setShowShiftBulk(false)} onSave={handleSaveShiftBulk} />}
-                    
                     {showAddMaintenance && <AddModal title="メンテナンス報告" onClose={() => setShowAddMaintenance(false)} onSave={d => handleSave('maintenance_records', d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date', default: new Date().toLocaleDateString('sv-SE') }]} />}
                     {editingMaintenanceRecord && <AddModal title="メンテナンス編集" initialData={editingMaintenanceRecord} onClose={() => setEditingMaintenanceRecord(null)} onSave={d => handleUpdate('maintenance_records', editingMaintenanceRecord.id, d)} hasImage fields={[{ name: 'facility', label: '施設', type: 'select', options: FACILITIES }, { name: 'staff', label: '担当者名', type: 'text' }, { name: 'task', label: '内容', type: 'textarea' }, { name: 'date', label: '日付', type: 'date' }]} />}
-                    
                     {showAddInventory && <AddModal title="備品登録" onClose={() => setShowAddInventory(false)} onSave={d => handleSave('inventory', { ...d, lastChecked: new Date().toISOString() })} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number', default: 0 }, { name: 'threshold', label: '補充アラート', type: 'number', default: 5 }]} />}
                     {editingInventoryItem && <AddModal title="備品編集" initialData={editingInventoryItem} onClose={() => setEditingInventoryItem(null)} onSave={d => handleUpdate('inventory', editingInventoryItem.id, d)} hasImage fields={[{ name: 'location', label: '拠点', type: 'select', options: INVENTORY_LOCATIONS }, { name: 'name', label: '品名', type: 'text' }, { name: 'stock', label: '個数', type: 'number' }, { name: 'threshold', label: '補充アラート', type: 'number' }]} />}
                     {showAddManual && <AddModal title="マニュアル投稿" onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', d)} hasImage fields={[{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
                     
                     {selectedDayDetail && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black text-slate-800">
-                            <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95">
-                                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black">{selectedDayDetail.day.replace(/-/g, '/')} の詳細</h3><button onClick={() => setSelectedDayDetail(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
+                            <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black">{selectedDayDetail.day.replace(/-/g, '/')} の詳細</h3><button onClick={() => setSelectedDayDetail(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
                                 <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar font-black text-left">
                                     {selectedDayDetail.bookings.map(b => {
                                         const isIN = b.startDate === selectedDayDetail.day; const isOUT = b.endDate === selectedDayDetail.day; const isS = selectedDayDetail.day >= b.startDate && selectedDayDetail.day < b.endDate && !isIN;
                                         return (
-                                            <div key={b.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 relative font-black">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span><span className="text-[10px] text-slate-400 uppercase font-black">{b.facility} · {b.people}名</span></div>
-                                                    <span className={`${isIN ? "bg-emerald-500" : isOUT ? "bg-rose-500" : "bg-indigo-500"} text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-sm`}>{isIN ? "IN" : isOUT ? "OUT" : isS ? "IN中" : "予約"}</span>
-                                                </div>
-                                                <div className="text-slate-800 text-lg font-black pr-16">{b.guestName} 様</div>
-                                                <div className="text-[10px] text-indigo-400 font-bold mt-1 bg-white inline-block px-2 py-0.5 rounded border border-indigo-50">{formatMMDD(b.startDate)} - {formatMMDD(b.endDate)}</div>
-                                                <BookingOptions booking={b} />
-                                                <div className="absolute bottom-4 right-4 flex gap-3">
-                                                    <button onClick={() => { setEditingBooking(b); setSelectedDayDetail(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors"><Icon name="Edit3" size={16} /></button>
-                                                    <button onClick={() => handleDelete('bookings', b.id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Icon name="Trash2" size={16} /></button>
-                                                </div>
-                                            </div>
+                                            <div key={b.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 relative font-black"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span><span className="text-[10px] text-slate-400 uppercase font-black">{b.facility} · {b.people}名</span></div><span className={`${isIN ? "bg-emerald-500" : isOUT ? "bg-rose-500" : "bg-indigo-500"} text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-sm`}>{isIN ? "IN" : isOUT ? "OUT" : isS ? "IN中" : "予約"}</span></div><div className="text-slate-800 text-lg font-black pr-16">{b.guestName} 様</div><div className="text-[10px] text-indigo-400 font-bold mt-1 bg-white inline-block px-2 py-0.5 rounded border border-indigo-50">{formatMMDD(b.startDate)} - {formatMMDD(b.endDate)}</div><BookingOptions booking={b} /><div className="absolute bottom-4 right-4 flex gap-3"><button onClick={() => { setEditingBooking(b); setSelectedDayDetail(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors"><Icon name="Edit3" size={16} /></button><button onClick={() => handleDelete('bookings', b.id)} className="text-slate-300 hover:text-rose-500 transition-colors"><Icon name="Trash2" size={16} /></button></div></div>
                                         );
                                     })}
                                     {selectedDayDetail.bookings.length === 0 && <div className="text-center py-10 text-slate-300 italic font-black">予定なし</div>}
