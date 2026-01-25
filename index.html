@@ -520,6 +520,43 @@
 
         // --- 5. Main Content Sections ---
 
+        // FIX: MaintenanceCardList component re-added
+        function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onAddUpdate, onDelete, onImageClick }) {
+            const sorted = useMemo(() => {
+                const base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
+                const list = [...base].sort((a, b) => {
+                    const getTime = (r) => {
+                        const baseTime = r.createdAt?.seconds || new Date(r.date).getTime() / 1000 || 0;
+                        const updateTimes = r.updates?.map(u => u.updatedAt?.seconds || new Date(u.updatedAt).getTime() / 1000) || [];
+                        return Math.max(baseTime, ...updateTimes);
+                    };
+                    return getTime(b) - getTime(a);
+                });
+                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+            }, [records, selectedFacility, maintenanceSearch]);
+            
+            const displayList = showArchive ? sorted : sorted.slice(0, 10);
+            
+            return (
+                <div className="space-y-4 text-left">
+                    {displayList.map(r => (
+                        <MaintenanceCard 
+                            key={r.id} 
+                            record={r} 
+                            onDelete={onDelete} 
+                            onEdit={onEdit} 
+                            onAddUpdate={onAddUpdate} 
+                            onImageClick={onImageClick} 
+                            selectionMode={selectionMode} 
+                            isSelected={selectedMaintIds.has(r.id)} 
+                            onToggleSelection={() => onToggleSelection(r.id)} 
+                        />
+                    ))} 
+                    {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">報告はありません</div>}
+                </div>
+            );
+        }
+
         function InventorySection({ items, onOpenAdd, onUpdateStock, onEdit, onDelete, onShowHistory }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [filterLoc, setFilterLoc] = useState('All');
@@ -583,7 +620,7 @@
                     <div className="flex bg-white p-1 rounded-2xl border shadow-sm mx-1"><button onClick={() => setActiveType('manual')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'manual' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="BookOpen" size={14} /> マニュアル</button><button onClick={() => setActiveType('faq')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'faq' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="MessageSquare" size={14} /> 質問集</button><button onClick={() => setActiveType('trouble')} className={`flex-1 py-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 ${activeType === 'trouble' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400'}`}><Icon name="AlertCircle" size={14} /> トラブル履歴</button></div>
                     <div className="px-1 relative text-slate-900"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="キーワード検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none text-slate-900" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="space-y-2 px-1 text-slate-900"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">拠点フィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_FACILITIES].map(f => <button key={f} onClick={() => setFacilityFilter(f)} className={`px-4 py-2 rounded-full border text-[11px] whitespace-nowrap transition-all shadow-sm font-black ${facilityFilter === f ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-100'}`}>{f}</button>)}</div></div>
-                    {activeType !== 'trouble' && (<div className="space-y-2 px-1 text-slate-900 text-left text-slate-900"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap font-black shadow-sm ${tagFilter === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}</div></div>)}
+                    {activeType !== 'trouble' && (<div className="space-y-2 px-1 text-slate-900 text-left text-slate-900"><label className="text-[10px] text-slate-400 uppercase tracking-widest font-black pl-2">カテゴリーフィルター</label><div className="flex gap-2 overflow-x-auto no-scrollbar py-1">{['すべて', ...MANUAL_TAGS].map(t => <button key={t} onClick={() => setTagFilter(t)} className={`px-4 py-2 rounded-xl border text-[11px] whitespace-nowrap font-black shadow-sm ${tagFilter === t ? 'bg-indigo-50 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-100'}`}>{t}</button>)}</div></div>)}
                     <div className="grid gap-4 px-1">{filtered.map(m => (activeType === 'trouble' ? <TroubleCard key={m.id} record={m} onEdit={onEdit} onDelete={onDelete} onImageClick={onImageClick} /> : <ManualCard key={m.id} manual={m} onCopy={onCopy} onDelete={onDelete} onImageClick={onImageClick} appId={appId} />))}</div>
                 </div>
             );
@@ -941,6 +978,7 @@
                 await handleUpdate('maintenance_records', record.id, { updates: methods.arrayUnion(newUpdate) });
             };
 
+            // FIX: Maintenance report generation logic added
             const handleGenerateLineReport = () => {
                 const selected = records.filter(r => selectedMaintIds.has(r.id));
                 let text = "メンテナンス報告です\n\n";
@@ -967,7 +1005,7 @@
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6 text-left">
                                         <div className="flex justify-between items-center px-1"><h2 className="text-sm text-slate-400 italic font-black">{isSelectionMode ? "項目を選択中..." : (showArchive ? "アーカイブ" : "最近の報告")}</h2><div className="flex gap-2">
-                                                <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedMaintIds(new Set()); }} className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm transition-all`}><Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />{isSelectionMode ? "取消" : "LINE報告"}</button>{!isSelectionMode && <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>}</div></div>
+                                                <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedMaintIds(new Set()); }} className={`${isSelectionMode ? 'bg-slate-200 text-slate-600' : 'bg-emerald-500 text-white'} text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm transition-all text-left`}><Icon name={isSelectionMode ? "X" : "MessageCircle"} size={12} />{isSelectionMode ? "取消" : "LINE報告"}</button>{!isSelectionMode && <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black"><Icon name="Plus" size={12} /> 報告</button>}</div></div>
                                         <div className="relative px-1 text-left"><Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="内容を検索..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black shadow-sm outline-none text-left" value={maintenanceSearch} onChange={e => setMaintenanceSearch(e.target.value)} /></div>
                                         <MaintenanceCardList records={records} selectedFacility={selectedFacility} maintenanceSearch={maintenanceSearch} showArchive={showArchive} selectionMode={isSelectionMode} selectedMaintIds={selectedMaintIds} onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} onEdit={setEditingMaintenanceRecord} onAddUpdate={setShowAddUpdate} onDelete={id => handleDelete('maintenance_records', id)} onImageClick={setSelectedImage} />
                                         {!isSelectionMode && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm text-left">{showArchive ? "最新の10件を表示" : "すべての履歴を見る"}</button>}
@@ -984,21 +1022,21 @@
 
                     {/* LINE Report Selector Modal */}
                     {showLineReportSelector && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2000] flex items-end sm:items-center justify-center p-4 font-black text-left text-slate-900">
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2000] flex items-end sm:items-center justify-center p-4 font-black text-left">
                             <div className="bg-white w-full max-sm:max-h-[90vh] max-w-sm rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto animate-in slide-in-from-bottom-5">
-                                <div className="flex justify-between items-center mb-6 text-left text-slate-900"><h3 className="text-lg font-black text-slate-800 italic">報告する施設を選択</h3><button onClick={() => { setShowLineReportSelector(false); setSelectedReportBookingIds(new Set()); }} className="p-2 text-slate-400 font-black">✕</button></div>
-                                <div className="space-y-3 mb-8 max-h-[50vh] overflow-y-auto no-scrollbar text-left text-slate-900">
+                                <div className="flex justify-between items-center mb-6 text-left"><h3 className="text-lg font-black text-slate-800 italic">報告する施設を選択</h3><button onClick={() => { setShowLineReportSelector(false); setSelectedReportBookingIds(new Set()); }} className="p-2 text-slate-400 font-black">✕</button></div>
+                                <div className="space-y-3 mb-8 max-h-[50vh] overflow-y-auto no-scrollbar text-left">
                                     {bookings.filter(b => new Date().toLocaleDateString('sv-SE') >= b.startDate && new Date().toLocaleDateString('sv-SE') <= b.endDate).map(b => (
                                         <button key={b.id} onClick={() => toggleReportSelection(b.id)} className={`w-full p-4 border rounded-2xl flex items-center justify-between transition-all ${selectedReportBookingIds.has(b.id) ? 'bg-indigo-50 border-indigo-600 shadow-md ring-2 ring-indigo-600/10' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
-                                            <div className="flex items-center gap-3 text-left text-slate-900">
+                                            <div className="flex items-center gap-3 text-left">
                                                 <span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility]}}></span>
-                                                <div className="text-left text-slate-900"><div className="text-xs font-black text-slate-400">{b.facility} {b.checkedOutAt && " (OUT)"}</div><div className="text-sm font-black text-slate-700">{b.guestName}様</div></div>
+                                                <div className="text-left"><div className="text-xs font-black text-slate-400">{b.facility} {b.checkedOutAt && " (OUT)"}</div><div className="text-sm font-black text-slate-700">{b.guestName}様</div></div>
                                             </div>
                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${selectedReportBookingIds.has(b.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>{selectedReportBookingIds.has(b.id) && <Icon name="Check" size={12} strokeWidth={4} />}</div>
                                         </button>
                                     ))}
                                 </div>
-                                <button disabled={selectedReportBookingIds.size === 0} onClick={handleBulkLineReport} className="w-full bg-emerald-500 text-white py-4 rounded-[1.5rem] shadow-xl flex items-center justify-center gap-3 font-black active:scale-95 transition-all disabled:bg-slate-200 disabled:shadow-none text-left text-slate-900">
+                                <button disabled={selectedReportBookingIds.size === 0} onClick={handleBulkLineReport} className="w-full bg-emerald-500 text-white py-4 rounded-[1.5rem] shadow-xl flex items-center justify-center gap-3 font-black active:scale-95 transition-all disabled:bg-slate-200 disabled:shadow-none text-left">
                                     <Icon name="MessageCircle" size={20} strokeWidth={3} />選んだ施設を報告する ({selectedReportBookingIds.size})
                                 </button>
                             </div>
@@ -1007,21 +1045,21 @@
 
                     {/* Details Modal */}
                     {selectedDayStr && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black text-slate-800 text-left text-slate-900">
-                            <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 text-left text-slate-900"><div className="flex justify-between items-center mb-6 text-left text-slate-900"><h3 className="text-xl font-black">{selectedDayStr.replace(/-/g, '/')} の詳細</h3><button onClick={() => setSelectedDayStr(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
-                                <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar font-black text-left text-slate-900">
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 font-black text-slate-800 text-left">
+                            <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 text-left"><div className="flex justify-between items-center mb-6 text-left"><h3 className="text-xl font-black">{selectedDayStr.replace(/-/g, '/')} の詳細</h3><button onClick={() => setSelectedDayStr(null)} className="p-2 text-slate-400 bg-slate-100 rounded-full font-black">✕</button></div>
+                                <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar font-black text-left">
                                     {dayDetailBookings.map((b, i) => {
                                         const isIN = b.startDate === selectedDayStr; const isOUT = b.endDate === selectedDayStr; const isS = selectedDayStr >= b.startDate && selectedDayStr < b.endDate && !isIN;
                                         return (
-                                            <div key={`${b.id}-${i}`} className="bg-slate-50 p-3 sm:p-4 rounded-3xl border border-slate-100 relative font-black text-slate-900 text-left text-slate-900">
-                                                <div className="flex items-center justify-between mb-2 text-left text-slate-900">
-                                                    <div className="flex items-center gap-2 text-left text-slate-900"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility] || '#cbd5e1'}}></span><span className="text-[10px] text-slate-400 uppercase font-black">{b?.facility || '施設不明'} · {b?.people || 0}名</span></div>
+                                            <div key={`${b.id}-${i}`} className="bg-slate-50 p-3 sm:p-4 rounded-3xl border border-slate-100 relative font-black text-slate-900 text-left">
+                                                <div className="flex items-center justify-between mb-2 text-left">
+                                                    <div className="flex items-center gap-2 text-left"><span className="w-3 h-3 rounded-full" style={{backgroundColor: FACILITY_COLORS[b.facility] || '#cbd5e1'}}></span><span className="text-[10px] text-slate-400 uppercase font-black">{b?.facility || '施設不明'} · {b?.people || 0}名</span></div>
                                                     <span className={`${isIN ? "bg-emerald-500" : isOUT ? "bg-rose-500" : "bg-indigo-500"} text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-sm`}>{isIN ? "IN" : isOUT ? "OUT" : isS ? "IN中" : "予約"}</span>
                                                 </div>
-                                                <div className="text-slate-800 text-lg font-black pr-16 text-left text-slate-900">{b?.guestName || '名称未設定'} 様</div>
-                                                <div className="text-[10px] text-indigo-400 font-bold mt-1 bg-white inline-block px-2 py-0.5 rounded border border-indigo-50 text-left text-slate-900">{formatMMDD(b?.startDate)} - {formatMMDD(b?.endDate)}</div>
+                                                <div className="text-slate-800 text-lg font-black pr-16 text-left">{b?.guestName || '名称未設定'} 様</div>
+                                                <div className="text-[10px] text-indigo-400 font-bold mt-1 bg-white inline-block px-2 py-0.5 rounded border border-indigo-50 text-left">{formatMMDD(b?.startDate)} - {formatMMDD(b?.endDate)}</div>
                                                 <BookingOptions booking={b} /><CheckInCounter booking={b} onUpdate={handleUpdateBooking} />
-                                                <div className="absolute bottom-4 right-4 flex gap-3 text-left text-slate-900">
+                                                <div className="absolute bottom-4 right-4 flex gap-3 text-left">
                                                     <button onClick={() => { setEditingBooking(b); setSelectedDayStr(null); }} className="text-slate-300 hover:text-indigo-500 transition-colors"><Icon name="Edit3" size={16} /></button>
                                                     <button onClick={() => { if(b?.id) handleDelete('bookings', b.id); setSelectedDayStr(null); }} className="text-slate-300 hover:text-rose-500 transition-colors"><Icon name="Trash2" size={16} /></button>
                                                 </div>
@@ -1029,7 +1067,7 @@
                                         );
                                     })}
                                 </div>
-                                <button onClick={() => setSelectedDayStr(null)} className="mt-6 w-full py-4 bg-slate-800 text-white font-black rounded-2xl active:scale-95 transition-all text-left text-slate-900">閉じる</button>
+                                <button onClick={() => setSelectedDayStr(null)} className="mt-6 w-full py-4 bg-slate-800 text-white font-black rounded-2xl active:scale-95 transition-all text-left">閉じる</button>
                             </div>
                         </div>
                     )}
@@ -1047,7 +1085,7 @@
                     {showAddManual && <AddModal title={manualTypeForAdd === 'trouble' ? "トラブル履歴を記録" : "マニュアル・FAQ投稿"} onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', { ...d, type: manualTypeForAdd })} hasImage fields={manualTypeForAdd === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local', default: new Date().toISOString().slice(0,16) }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
                     {editingManual && <AddModal title="内容を修正" initialData={editingManual} onClose={() => setEditingManual(null)} onSave={d => handleUpdate('manuals', editingManual.id, d)} hasImage fields={editingManual.type === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local' }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
 
-                    {selectedImage && <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4 text-left text-slate-900" onClick={() => setSelectedImage(null)}><button className="absolute top-6 right-6 text-white text-left text-slate-900"><Icon name="X" size={32} /></button><img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl font-black text-left text-slate-900" /></div>}
+                    {selectedImage && <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4 text-left text-slate-900" onClick={() => setSelectedImage(null)}><button className="absolute top-6 right-6 text-white text-left"><Icon name="X" size={32} /></button><img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl font-black text-left" /></div>}
                 </div>
             );
         }
