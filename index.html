@@ -520,10 +520,11 @@
         // --- Main Content Sections ---
 
         function MaintenanceCardList({ records, selectedFacility, maintenanceSearch, maintenanceDateFilter, showArchive, selectionMode, selectedMaintIds, onToggleSelection, onEdit, onAddUpdate, onDelete, onImageClick }) {
-            const sorted = useMemo(() => {
+            const todayStr = new Date().toLocaleDateString('sv-SE');
+            const [expandedDates, setExpandedDates] = useState(new Set([todayStr]));
+
+            const sortedAndGrouped = useMemo(() => {
                 let base = records.filter(r => selectedFacility === 'all' || r.facility === selectedFacility);
-                
-                // Date Filter logic
                 if (maintenanceDateFilter) {
                     base = base.filter(r => r.date === maintenanceDateFilter);
                 }
@@ -536,27 +537,67 @@
                     };
                     return getTime(b) - getTime(a);
                 });
-                return maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+                
+                const filtered = maintenanceSearch ? list.filter(r => (r.task || "").toLowerCase().includes(maintenanceSearch.toLowerCase()) || (r.staff || "").toLowerCase().includes(maintenanceSearch.toLowerCase())) : list;
+                
+                // Group by date
+                const groups = {};
+                filtered.forEach(r => {
+                    const d = r.date || "不明";
+                    if (!groups[d]) groups[d] = [];
+                    groups[d].push(r);
+                });
+                return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
             }, [records, selectedFacility, maintenanceSearch, maintenanceDateFilter]);
             
-            const displayList = (showArchive || maintenanceDateFilter) ? sorted : sorted.slice(0, 10);
-            
+            const toggleDate = (date) => {
+                const next = new Set(expandedDates);
+                if (next.has(date)) next.delete(date);
+                else next.add(date);
+                setExpandedDates(next);
+            };
+
+            if (sortedAndGrouped.length === 0) return <div className="py-20 text-center text-slate-300 italic font-black">報告はありません</div>;
+
             return (
-                <div className="space-y-4 text-left">
-                    {displayList.map(r => (
-                        <MaintenanceCard 
-                            key={r.id} 
-                            record={r} 
-                            onDelete={onDelete} 
-                            onEdit={onEdit} 
-                            onAddUpdate={onAddUpdate} 
-                            onImageClick={onImageClick} 
-                            selectionMode={selectionMode} 
-                            isSelected={selectedMaintIds.has(r.id)} 
-                            onToggleSelection={() => onToggleSelection(r.id)} 
-                        />
-                    ))} 
-                    {displayList.length === 0 && <div className="py-20 text-center text-slate-300 italic font-black">報告はありません</div>}
+                <div className="space-y-6 text-left">
+                    {sortedAndGrouped.map(([date, items]) => {
+                        const isToday = date === todayStr;
+                        const isExpanded = expandedDates.has(date) || selectionMode || maintenanceDateFilter;
+                        return (
+                            <div key={date} className="space-y-3">
+                                <button 
+                                    onClick={() => toggleDate(date)}
+                                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-all ${isToday ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-white border-slate-100 text-slate-400'}`}
+                                >
+                                    <span className="text-[11px] font-black flex items-center gap-2">
+                                        <Icon name="Calendar" size={14} />
+                                        {isToday ? "今日の報告" : `${date.replace(/-/g, '/')} の報告`}
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{items.length}</span>
+                                    </span>
+                                    <Icon name={isExpanded ? "ChevronUp" : "ChevronDown"} size={16} strokeWidth={3} />
+                                </button>
+                                
+                                {isExpanded && (
+                                    <div className="space-y-4 animate-in slide-in-from-top-1 duration-200">
+                                        {items.map(r => (
+                                            <MaintenanceCard 
+                                                key={r.id} 
+                                                record={r} 
+                                                onDelete={onDelete} 
+                                                onEdit={onEdit} 
+                                                onAddUpdate={onAddUpdate} 
+                                                onImageClick={0} 
+                                                selectionMode={selectionMode} 
+                                                isSelected={selectedMaintIds.has(r.id)} 
+                                                onToggleSelection={() => onToggleSelection(r.id)} 
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             );
         }
@@ -905,7 +946,7 @@
             const [editingMaintenanceRecord, setEditingMaintenanceRecord] = useState(null);
             const [showAddUpdate, setShowAddUpdate] = useState(null);
             const [maintenanceSearch, setMaintenanceSearch] = useState('');
-            const [maintenanceDateFilter, setMaintenanceDateFilter] = useState(''); // New state for jumping to a date
+            const [maintenanceDateFilter, setMaintenanceDateFilter] = useState(''); 
             const [showAddInventory, setShowAddInventory] = useState(false);
             const [editingInventoryItem, setEditingInventoryItem] = useState(null);
             const [showInventoryHistory, setShowInventoryHistory] = useState(null);
@@ -1049,25 +1090,15 @@
                 let text = "【メンテ報告まとめ】\n━━━━━━━━━━━━\n";
                 selectedRecords.forEach((r, idx) => {
                     text += `■ ${r.date} (${r.facility})\n`;
-                    
-                    // 写真があるかチェック（メインまたはアップデート内）
                     const hasImages = (r.images && r.images.length > 0) || (r.updates && r.updates.some(u => u.images && u.images.length > 0));
-                    if (hasImages) {
-                        text += "【写真】\n";
-                    }
-                    
+                    if (hasImages) text += "【写真】\n";
                     text += `${r.task}\n`;
-                    
                     if (r.updates && r.updates.length > 0) {
-                        r.updates.forEach(u => {
-                            text += ` └追記: ${u.comment}\n`;
-                        });
+                        r.updates.forEach(u => { text += ` └追記: ${u.comment}\n`; });
                     }
-                    
-                    if (idx < selectedRecords.length - 1) {
-                        text += "--------------------\n";
-                    }
+                    if (idx < selectedRecords.length - 1) text += "--------------------\n";
                 });
+                text += "\n詳細はこちら→ https://ion0002.pages.dev/";
                 return text;
             };
 
@@ -1109,23 +1140,22 @@
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6 text-left">
                                         <div className="flex flex-col gap-3 px-1">
-                                            <div className="flex justify-between items-center">
-                                                <h2 className="text-sm text-slate-400 italic font-black">{isSelectionMode ? "報告する項目を選択中" : (showArchive ? "アーカイブ" : "最近の報告")}</h2>
+                                            {/* Button Row - optimized for mobile stacking and wrapping */}
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 {isSelectionMode ? (
-                                                    <div className="flex gap-2">
+                                                    <>
                                                         <button onClick={() => { setIsSelectionMode(false); setSelectedMaintIds(new Set()); }} className="bg-slate-200 text-slate-600 text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm transition-all"><Icon name="X" size={12} />取消</button>
-                                                        <button onClick={handleGenerateLineReport} disabled={selectedMaintIds.size === 0} className="bg-emerald-500 text-white text-[10px] px-4 py-2 rounded-full flex items-center gap-1 font-black shadow-lg shadow-emerald-200 active:scale-95 disabled:bg-slate-300 disabled:shadow-none transition-all"><Icon name="Copy" size={12} />選択項目をコピー ({selectedMaintIds.size})</button>
-                                                    </div>
+                                                        <button onClick={handleGenerateLineReport} disabled={selectedMaintIds.size === 0} className="bg-emerald-500 text-white text-[10px] px-4 py-2 rounded-full flex items-center gap-1 font-black shadow-lg shadow-emerald-200 active:scale-95 disabled:bg-slate-300 disabled:shadow-none transition-all flex-1 text-center justify-center"><Icon name="Copy" size={12} />コピー ({selectedMaintIds.size})</button>
+                                                    </>
                                                 ) : (
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => setIsSelectionMode(true)} className="bg-emerald-500 text-white text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm active:scale-95 transition-all"><Icon name="MessageCircle" size={12} />選択コピー</button>
-                                                        <button onClick={() => setShowBulkCopyModal(true)} className="bg-sky-500 text-white text-[10px] px-3 py-2 rounded-full flex items-center gap-1 font-black shadow-sm active:scale-95 transition-all"><Icon name="Calendar" size={12} />日付指定コピー</button>
-                                                        <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full shadow-md flex items-center gap-1 font-black active:scale-95 transition-all"><Icon name="Plus" size={12} />報告</button>
-                                                    </div>
+                                                    <>
+                                                        <button onClick={() => setIsSelectionMode(true)} className="bg-emerald-500 text-white text-[10px] px-3 py-2.5 rounded-full flex items-center gap-1 font-black shadow-sm active:scale-95 transition-all whitespace-nowrap"><Icon name="MessageCircle" size={12} />選択コピー</button>
+                                                        <button onClick={() => setShowBulkCopyModal(true)} className="bg-sky-500 text-white text-[10px] px-3 py-2.5 rounded-full flex items-center gap-1 font-black shadow-sm active:scale-95 transition-all whitespace-nowrap"><Icon name="Calendar" size={12} />日付指定コピー</button>
+                                                        <button onClick={() => setShowAddMaintenance(true)} className="bg-indigo-600 text-white text-[10px] px-4 py-2.5 rounded-full shadow-md flex items-center gap-1 font-black active:scale-95 transition-all flex-1 justify-center whitespace-nowrap"><Icon name="Plus" size={12} />報告</button>
+                                                    </>
                                                 )}
                                             </div>
                                             
-                                            {/* Advanced Filter Area */}
                                             <div className="space-y-2">
                                                 <div className="relative text-left">
                                                     <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1166,7 +1196,7 @@
                                             onImageClick={setSelectedImage} 
                                         />
                                         
-                                        {(!isSelectionMode && !maintenanceDateFilter) && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm text-left">{showArchive ? "最新の10件を表示" : "すべての履歴を見る"}</button>}
+                                        {(!isSelectionMode && !maintenanceDateFilter) && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm text-left">{showArchive ? "直近の報告のみ表示" : "すべての履歴を見る"}</button>}
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={handleUpdateStock} onShowHistory={setShowInventoryHistory} />}
