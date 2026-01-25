@@ -443,14 +443,26 @@
                         </div>
                     </div>
                     <p className="text-slate-700 text-sm font-bold mb-4 whitespace-pre-wrap leading-relaxed">{record.task}</p>
-                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">{record.images.map((img, i) => <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
+                    {record.images && record.images.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3">
+                            {record.images.map((img, i) => (
+                                <img key={i} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(record.images, i); }} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />
+                            ))}
+                        </div>
+                    )}
                     {record.updates && record.updates.length > 0 && (
                         <div className="mt-4 space-y-4 border-l-2 border-slate-100 pl-4">
                             {record.updates.map((up, i) => (
                                 <div key={i} className="relative">
                                     <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white"></div>
                                     <p className="text-slate-600 text-xs font-bold leading-relaxed mb-2">{up.comment}</p>
-                                    {up.images && up.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar mb-2">{up.images.map((img, j) => <img key={j} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(img); }} className="w-14 h-14 object-cover rounded-lg shrink-0" />)}</div>)}
+                                    {up.images && up.images.length > 0 && (
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-2">
+                                            {up.images.map((img, j) => (
+                                                <img key={j} src={img} onClick={(e) => { e.stopPropagation(); onImageClick(up.images, j); }} className="w-14 h-14 object-cover rounded-lg shrink-0" />
+                                            ))}
+                                        </div>
+                                    )}
                                     <div className="text-[9px] text-slate-300 font-black">{formatDateTime(up.updatedAt)}</div>
                                 </div>
                             ))}
@@ -471,7 +483,7 @@
                     <div className="flex justify-between items-start mb-2 text-left text-slate-900"><div className="flex items-center gap-2"><span className="bg-rose-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black uppercase">Trouble</span><span className="text-[11px] font-black text-slate-400 uppercase">{record.facility}</span>{isToday && <span className="bg-emerald-50 text-emerald-600 text-[8px] px-2 py-0.5 rounded-full font-black">NEW</span>}</div></div>
                     <div className="mb-4 text-left"><label className="text-[9px] text-rose-400 block mb-1">トラブル内容</label><p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{record?.title || '内容なし'}</p></div>
                     <div className="mb-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-left"><label className="text-[9px] text-indigo-400 block mb-1 text-left">対処法</label><p className="text-slate-600 text-xs font-bold leading-relaxed whitespace-pre-wrap text-left">{record?.solution || '未対応'}</p></div>
-                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3 text-left">{record.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(img)} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
+                    {record.images && record.images.length > 0 && (<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-3 text-left">{record.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(record.images, i)} className="w-20 h-20 object-cover rounded-xl border border-slate-100 shrink-0" />)}</div>)}
                     <div className="flex justify-between items-end text-[10px] text-slate-300 font-black pt-3 border-t border-slate-50 text-left text-slate-900">
                         <span>{formatDateTime(record.date || record.createdAt?.seconds * 1000)}</span>
                         <div className="flex gap-2"><button onClick={() => onEdit(record)} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-indigo-600 active:scale-90 transition-all"><Icon name="Edit3" size={14} /></button><button onClick={() => onDelete(record.id)} className="bg-slate-50 text-slate-400 p-2.5 rounded-xl border border-slate-100 hover:text-rose-600 active:scale-90 transition-all"><Icon name="Trash2" size={14} /></button></div>
@@ -510,7 +522,7 @@
                     <div className="p-5 text-left text-slate-900">
                         <div className="flex justify-between items-start mb-3 text-left"><div className="flex flex-wrap gap-2 text-left"><span className="text-[9px] font-black px-2.5 py-1 rounded-full text-white" style={{backgroundColor: FACILITY_COLORS[manual.facility] || '#94A3B8'}}>{manual.facility}</span><span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{manual.tag || 'その他'}</span></div><div className="flex gap-1 text-left"><button onClick={() => setIsEditing(true)} className="text-slate-200 hover:text-indigo-500 p-1 text-left"><Icon name="Edit3" size={14} /></button><button onClick={() => onDelete(manual.id)} className="text-slate-200 hover:text-rose-500 p-1 text-left"><Icon name="Trash2" size={14} /></button></div></div>
                         <h3 className="text-slate-800 text-base mb-3 font-black text-left">{manual?.title || '名称なし'}</h3><p className="text-slate-600 text-xs font-bold leading-relaxed whitespace-pre-wrap bg-slate-50/80 p-4 rounded-2xl mb-3 text-left">{manual?.content || '内容なし'}</p>
-                        {manual.images && manual.images.length > 0 && <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 text-left">{manual.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(img)} className="w-24 h-24 object-cover rounded-2xl shadow-sm border shrink-0 text-left" />)}</div>}
+                        {manual.images && manual.images.length > 0 && <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 text-left">{manual.images.map((img, i) => <img key={i} src={img} onClick={() => onImageClick(manual.images, i)} className="w-24 h-24 object-cover rounded-2xl shadow-sm border shrink-0 text-left" />)}</div>}
                         <div className="flex justify-end pt-2 text-left"><button onClick={() => onCopy(manual.content)} className="text-indigo-400 text-[10px] flex items-center gap-1 px-3 py-1 bg-indigo-50 rounded-full active:scale-95 font-black text-left"><Icon name="Copy" size={12} /> コピーする</button></div>
                     </div>
                 </div>
@@ -587,7 +599,7 @@
                                                 onDelete={onDelete} 
                                                 onEdit={onEdit} 
                                                 onAddUpdate={onAddUpdate} 
-                                                onImageClick={0} 
+                                                onImageClick={onImageClick} 
                                                 selectionMode={selectionMode} 
                                                 isSelected={selectedMaintIds.has(r.id)} 
                                                 onToggleSelection={() => onToggleSelection(r.id)} 
@@ -747,7 +759,6 @@
             );
         }
 
-        // --- Schedule Section Container ---
         function ScheduleSectionContainer({ selectedFacility, bookings, records, manuals, shifts, onOpenAdd, onOpenDetail, onLinkeyCheck, onUpdateBooking, onLineReport }) {
             const today = new Date();
             const todayStr = today.toLocaleDateString('sv-SE');
@@ -956,7 +967,7 @@
             const [showAddBooking, setShowAddBooking] = useState(false);
             const [editingBooking, setEditingBooking] = useState(null);
             const [selectedDayStr, setSelectedDayStr] = useState(null); 
-            const [selectedImage, setSelectedImage] = useState(null);
+            const [imageGallery, setImageGallery] = useState(null); // { images: [], index: 0 }
             const [showShiftBulk, setShowShiftBulk] = useState(false);
             const [selectedShiftDate, setSelectedShiftDate] = useState(null);
             const [showArchive, setShowArchive] = useState(false);
@@ -1036,10 +1047,11 @@
                 const selectedBookings = bookings.filter(b => selectedReportBookingIds.has(b.id));
                 selectedBookings.forEach((b, idx) => {
                     const isOUT = b.endDate === todayStr; const isIN = b.startDate === todayStr; const isSTAY = todayStr > b.startDate && todayStr < b.endDate;
+                    const m = b.menCount || 0; const w = b.womenCount || 0; const c = b.childCount || 0; const currentTotal = m + w + c;
                     text += `【${b.facility}】\n`;
                     if (isOUT) { text += `チェックアウトされました\n`; } 
+                    else if (currentTotal === 0) { text += `まだチェックインされていません / 予定${b.people}名\n`; }
                     else {
-                        const m = b.menCount || 0; const w = b.womenCount || 0; const c = b.childCount || 0; const currentTotal = m + w + c;
                         const parts = []; if (m > 0) parts.push(`男${m}名`); if (w > 0) parts.push(`女${w}名`); if (c > 0) parts.push(`子供${c}名`);
                         if (parts.length > 0) { text += parts.join('、') + `\n`; }
                         text += `計${currentTotal}名 / 予定${b.people}名\n`;
@@ -1129,6 +1141,16 @@
                 return bookings.filter(b => selectedDayStr >= b.startDate && selectedDayStr <= b.endDate);
             }, [selectedDayStr, bookings]);
 
+            // Gallery logic
+            const nextImage = (e) => {
+                e.stopPropagation();
+                setImageGallery(prev => ({ ...prev, index: (prev.index + 1) % prev.images.length }));
+            };
+            const prevImage = (e) => {
+                e.stopPropagation();
+                setImageGallery(prev => ({ ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length }));
+            };
+
             return (
                 <div className="min-h-screen pb-24 overflow-x-hidden bg-slate-50 font-black text-left text-slate-900">
                     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm text-left"><h1 className="text-xl font-black text-indigo-700 flex items-center gap-2 tracking-tighter text-left"><Icon name="RefreshCw" size={20} /><span>Portal</span></h1><select value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)} className="bg-slate-100 border-none rounded-full px-4 py-1.5 text-[11px] font-black outline-none text-left"><option value="all">全施設表示</option>{FACILITIES.map(f => <option key={f} value={f}>{f}</option>)}</select></header>
@@ -1140,7 +1162,6 @@
                                 {activeTab === 'maintenance' && (
                                     <div className="space-y-6 text-left">
                                         <div className="flex flex-col gap-3 px-1">
-                                            {/* Button Row - optimized for mobile stacking and wrapping */}
                                             <div className="flex flex-wrap items-center gap-2">
                                                 {isSelectionMode ? (
                                                     <>
@@ -1155,7 +1176,6 @@
                                                     </>
                                                 )}
                                             </div>
-                                            
                                             <div className="space-y-2">
                                                 <div className="relative text-left">
                                                     <Icon name="Search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1166,47 +1186,46 @@
                                                         <Icon name="History" size={12} className="text-indigo-500" />
                                                         <span className="text-[10px] text-slate-500 font-black">日付で探す:</span>
                                                     </div>
-                                                    <input 
-                                                        type="date" 
-                                                        value={maintenanceDateFilter} 
-                                                        onChange={e => setMaintenanceDateFilter(e.target.value)}
-                                                        className="bg-transparent text-[11px] font-black outline-none flex-1 text-slate-700" 
-                                                    />
-                                                    {maintenanceDateFilter && (
-                                                        <button onClick={() => setMaintenanceDateFilter('')} className="bg-slate-200 p-1 rounded-full text-slate-500">
-                                                            <Icon name="X" size={10} strokeWidth={3} />
-                                                        </button>
-                                                    )}
+                                                    <input type="date" value={maintenanceDateFilter} onChange={e => setMaintenanceDateFilter(e.target.value)} className="bg-transparent text-[11px] font-black outline-none flex-1 text-slate-700" />
+                                                    {maintenanceDateFilter && (<button onClick={() => setMaintenanceDateFilter('')} className="bg-slate-200 p-1 rounded-full text-slate-500"><Icon name="X" size={10} strokeWidth={3} /></button>)}
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        <MaintenanceCardList 
-                                            records={records} 
-                                            selectedFacility={selectedFacility} 
-                                            maintenanceSearch={maintenanceSearch} 
-                                            maintenanceDateFilter={maintenanceDateFilter}
-                                            showArchive={showArchive} 
-                                            selectionMode={isSelectionMode} 
-                                            selectedMaintIds={selectedMaintIds} 
-                                            onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} 
-                                            onEdit={setEditingMaintenanceRecord} 
-                                            onAddUpdate={setShowAddUpdate} 
-                                            onDelete={id => handleDelete('maintenance_records', id)} 
-                                            onImageClick={setSelectedImage} 
-                                        />
-                                        
+                                        <MaintenanceCardList records={records} selectedFacility={selectedFacility} maintenanceSearch={maintenanceSearch} maintenanceDateFilter={maintenanceDateFilter} showArchive={showArchive} selectionMode={isSelectionMode} selectedMaintIds={selectedMaintIds} onToggleSelection={(id) => { const n = new Set(selectedMaintIds); if(n.has(id)) n.delete(id); else n.add(id); setSelectedMaintIds(n); }} onEdit={setEditingMaintenanceRecord} onAddUpdate={setShowAddUpdate} onDelete={id => handleDelete('maintenance_records', id)} onImageClick={(imgs, idx) => setImageGallery({images: imgs, index: idx})} />
                                         {(!isSelectionMode && !maintenanceDateFilter) && <button onClick={() => setShowArchive(!showArchive)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black shadow-sm text-left">{showArchive ? "直近の報告のみ表示" : "すべての履歴を見る"}</button>}
                                     </div>
                                 )}
                                 {activeTab === 'inventory' && <InventorySection items={inventoryItems} onOpenAdd={() => setShowAddInventory(true)} onEdit={setEditingInventoryItem} onDelete={id => handleDelete('inventory', id)} onUpdateStock={handleUpdateStock} onShowHistory={setShowInventoryHistory} />}
-                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={(type) => { setManualTypeForAdd(type); setShowAddManual(true); }} onCopy={txt => copyToClipboard(txt, "本文をコピーしました")} onDelete={id => handleDelete('manuals', id)} onEdit={setEditingManual} onImageClick={setSelectedImage} appId={appId} />}
+                                {activeTab === 'manual' && <ManualSectionWrapperContainer manuals={manuals} selectedFacility={selectedFacility} onOpenAdd={(type) => { setManualTypeForAdd(type); setShowAddManual(true); }} onCopy={txt => copyToClipboard(txt, "本文をコピーしました")} onDelete={id => handleDelete('manuals', id)} onEdit={setEditingManual} onImageClick={(imgs, idx) => setImageGallery({images: imgs, index: idx})} appId={appId} />}
                             </>
                         )}
                     </main>
 
                     {toastMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black animate-in fade-in tracking-tight">{toastMessage}</div>}
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-40 shadow-lg font-black"><NavItem active={activeTab === 'schedule'} iconName="Bed" label="宿泊" onClick={() => setActiveTab('schedule')} /><NavItem active={activeTab === 'shift'} iconName="Calendar" label="シフト" onClick={() => setActiveTab('shift')} /><NavItem active={activeTab === 'maintenance'} iconName="Wrench" label="メンテ" onClick={() => setActiveTab('maintenance')} /><NavItem active={activeTab === 'inventory'} iconName="Package" label="備品" onClick={() => setActiveTab('inventory')} /><NavItem active={activeTab === 'manual'} iconName="BookOpen" label="マニュアル" onClick={() => setActiveTab('manual')} /></nav>
+
+                    {/* Image Viewer (Gallery) */}
+                    {imageGallery && (
+                        <div className="fixed inset-0 bg-black/95 z-[5000] flex items-center justify-center p-4" onClick={() => setImageGallery(null)}>
+                            <button className="absolute top-6 right-6 text-white z-50"><Icon name="X" size={32} /></button>
+                            
+                            {imageGallery.images.length > 1 && (
+                                <>
+                                    <button onClick={prevImage} className="absolute left-4 text-white/50 hover:text-white p-2 z-50"><Icon name="ChevronLeft" size={48} /></button>
+                                    <button onClick={nextImage} className="absolute right-4 text-white/50 hover:text-white p-2 z-50"><Icon name="ChevronRight" size={48} /></button>
+                                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/70 font-black text-sm">
+                                        {imageGallery.index + 1} / {imageGallery.images.length}
+                                    </div>
+                                </>
+                            )}
+                            
+                            <img 
+                                src={imageGallery.images[imageGallery.index]} 
+                                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+                                onClick={(e) => { e.stopPropagation(); setImageGallery(null); }}
+                            />
+                        </div>
+                    )}
 
                     {/* Modals */}
                     {showLineReportSelector && (
@@ -1272,8 +1291,6 @@
                     {showInventoryHistory && <StockHistoryModal item={showInventoryHistory} logs={inventoryLogs.filter(l => l.itemId === showInventoryHistory.id)} onClose={() => setShowInventoryHistory(null)} />}
                     {showAddManual && <AddModal title={manualTypeForAdd === 'trouble' ? "トラブル履歴を記録" : "マニュアル・FAQ投稿"} onClose={() => setShowAddManual(false)} onSave={d => handleSave('manuals', { ...d, type: manualTypeForAdd })} hasImage fields={manualTypeForAdd === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local', default: new Date().toISOString().slice(0,16) }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'type', label: '種類', type: 'select', options: ['manual', 'faq'] }, { name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
                     {editingManual && <AddModal title="内容を修正" initialData={editingManual} onClose={() => setEditingManual(null)} onSave={d => handleUpdate('manuals', editingManual.id, d)} hasImage fields={editingManual.type === 'trouble' ? [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'date', label: '日時', type: 'datetime-local' }, { name: 'title', label: 'トラブル概要', type: 'text' }, { name: 'content', label: '内容詳細', type: 'textarea' }, { name: 'solution', label: '対処法', type: 'textarea' }] : [{ name: 'facility', label: '拠点', type: 'select', options: MANUAL_FACILITIES }, { name: 'tag', label: 'カテゴリー', type: 'select', options: MANUAL_TAGS }, { name: 'title', label: 'タイトル', type: 'text' }, { name: 'content', label: '内容', type: 'textarea' }]} />}
-
-                    {selectedImage && <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-4 text-left text-slate-900" onClick={() => setSelectedImage(null)}><button className="absolute top-6 right-6 text-white text-left"><Icon name="X" size={32} /></button><img src={selectedImage} className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl font-black text-left" /></div>}
                 </div>
             );
         }
