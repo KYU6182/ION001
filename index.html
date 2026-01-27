@@ -22,6 +22,7 @@
         /* フォント設定 */
         body {
             font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
         }
         .font-serif {
             font-family: 'Noto Serif JP', serif;
@@ -48,7 +49,7 @@
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
-<body class="bg-gray-100">
+<body>
 
     <div id="root"></div>
 
@@ -525,9 +526,19 @@
                 );
             };
 
-            const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(<App />);
+            return (
+                <>
+                    {phase === 'landing' && <LandingScreen />}
+                    {phase === 'profile' && <ProfileScreen />}
+                    {phase === 'main' && <MainScreen />}
+                    {phase === 'voting' && <VotingScreen />}
+                    {phase === 'result' && <ResultScreen />}
+                </>
+            );
         }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
